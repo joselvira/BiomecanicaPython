@@ -11,3 +11,10 @@ Python es uno de los lenguajes de programación más emergentes hoy en día. Se 
   - etc.
 En esta página encontrarás tutoriales que abarcan algunas de las posibilidades que permite Python para facilitar la vida del biomecánico. Espero que te resulten interesantes y útiles.
 Y si tienes algún comentario o propuesta de mejora, estoy abierto a sujerencias.
+
+
+
+
+
+## Licencia
+El código presentado se encuentra bajo [licencia MIT](https://opensource.org/licenses/mit-license.php)
