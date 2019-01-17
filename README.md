@@ -16,8 +16,9 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sujerencias
 ## Representación gráfica
 [Cómo configurar gráficas](https://colab.research.google.com/gist/joselvira/801ea1b4c7f0616cf917663abf9d6ba2/4-1-tipos-de-graficas-basicas.ipynb) -->accede a una copia creada desde Colab como Git...que guarda en Colab
 
-[Cómo configurar gráficas]() -->accede a una copia desde Colab que guarda en Github
+[Cómo configurar gráficas](https://github.com/joselvira/BiomecanicaPython/blob/master/4_1_Tipos_de_graficas_basicas.ipynb) -->accede a una copia desde Colab que guarda en Github
 
+[Variables]()
 
 ## Licencia
 El código presentado se encuentra bajo [licencia MIT](https://opensource.org/licenses/mit-license.php)
