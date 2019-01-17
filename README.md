@@ -1,2 +1,13 @@
 # BiomecanicaPython
 Tutoriales sobre tratamiento de datos en Biomecánica con Python
+
+##Introducción
+Cuando trabajamos con el análisis del movimiento humano en disicplinas como la Biomecánica o el Control Motor, es frecuente encontrarse con montañas de archivos revosantes de números. Para realizar los procedimientos de tratamiento de datos, en ocasiones podemos recurrir a herrameintas como hojas de cálculo, otras veces podemos encontrar programas más específicos, pero con frecuencia necesitaremos soluciones más específicas que se adapten a nuestras necesidades.
+Una de las opciones para solucionar estos problemas consiste en programar. Un programa será específico para resolver una tarea concreta. Programar no siempre es fácil y no a todo el mundo le resulta motivante. Sin embargo, teniendo unas nociones básicas y con cierto aprendizaje y experiencia se pueden conseguir resultados más que convincentes.
+Python es uno de los lenguajes de programación más emergentes hoy en día. Se trata de a la vez de un lenguaje y un entorno de programación, ¡y gratuito! Sólo por eso ya merece la pena intentar aprovecharlo. Además ofrece otras ventajas, como que es un lenguaje muy flexible ya que permite solucionar un ámplio abanico de problemas, como por ejemplo:
+  - Realizar gráficas con calidad de publicación
+  - Realizar tratamiento de datos avanzados.
+  - Realizar estadísticas, desde descriptivas a sofisticadas.
+  - etc.
+En esta página encontrarás tutoriales que abarcan algunas de las posibilidades que permite Python para facilitar la vida del biomecánico. Espero que te resulten interesantes y útiles.
+Y si tienes algún comentario o propuesta de mejora, estoy abierto a sujerencias.
