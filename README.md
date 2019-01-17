@@ -18,7 +18,7 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sujerencias
 
 [Cómo configurar gráficas](https://github.com/joselvira/BiomecanicaPython/blob/master/4_1_Tipos_de_graficas_basicas.ipynb) -->accede a una copia desde Colab que guarda en Github
 
-[Variables]()
+[Variables](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/3.1-Tipos%20de%20variables.ipynb) --> accede a un archivo subido a una carpeta de Github
 
 ## Licencia
 El código presentado se encuentra bajo [licencia MIT](https://opensource.org/licenses/mit-license.php)
