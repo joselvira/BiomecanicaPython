@@ -26,3 +26,9 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sujerencias
 
 ## Licencia
 El código presentado se encuentra bajo [licencia MIT](https://opensource.org/licenses/mit-license.php)
+
+## Autor
+Jose Luis López Elvira
+
+## Última actualización
+19/02/2019
