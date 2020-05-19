@@ -29,4 +29,4 @@ El código presentado se encuentra bajo [licencia MIT](https://opensource.org/li
 Jose Luis López Elvira (jose.lopeze@umh.es)
 
 ### Última actualización
-28/05/2019
+19/05/2020
