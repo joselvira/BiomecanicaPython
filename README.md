@@ -9,6 +9,7 @@ Python es uno de los lenguajes de programación más emergentes hoy en día. Se 
   - Realizar tratamiento de datos avanzados.
   - Realizar estadísticas, desde descriptivas a sofisticadas.
   - etc.
+  
 En esta página encontrarás tutoriales que abarcan algunas de las posibilidades que permite Python para facilitar la vida del biomecánico (entre otros). Espero que te resulten interesantes y útiles.
 Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias.
 
