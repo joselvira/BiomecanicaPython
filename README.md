@@ -18,9 +18,9 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 
 [Tipos de gráficas sofisticadas específicas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/GraficasSofisticadasEspecificas.ipynb)
 
-[Uso de Blender como herramienta (gratuita) de digitalización] En proceso.
+Uso de Blender como herramienta (gratuita) de digitalización. En proceso.
 
-[Análisis de datos de test com máquina isocinética] En proceso.
+Análisis de datos de test com máquina isocinética. En proceso.
 
 ## Licencia
 El código presentado se encuentra bajo [licencia MIT](https://opensource.org/licenses/mit-license.php)
