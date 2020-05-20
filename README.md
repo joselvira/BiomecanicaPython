@@ -23,6 +23,8 @@ Uso de Blender como herramienta (gratuita) de digitalización. En proceso.
 
 Análisis de datos de test com máquina isocinética. En proceso.
 
+Análisis del perfil de fuerza en salto vertical. En proceso.
+
 ## Licencia
 El código presentado se encuentra bajo [licencia MIT](https://opensource.org/licenses/mit-license.php)
 
