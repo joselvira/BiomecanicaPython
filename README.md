@@ -19,6 +19,8 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 
 [Tipos de gráficas sofisticadas específicas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/GraficasSofisticadasEspecificas.ipynb)
 
+[Cómo transformar la orientación de las bases de datos](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Transformar_Bases_de_Datos.ipynb)
+
 [Uso de Blender como herramienta (gratuita) de digitalización](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Digitalizar_con_Blender_y_Python.ipynb)
 
 Análisis del perfil de fuerza en salto vertical. En proceso.
