@@ -21,9 +21,9 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 
 [Uso de Blender como herramienta (gratuita) de digitalización](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Digitalizar_con_Blender_y_Python.ipynb)
 
-Análisis de datos de test com máquina isocinética. En proceso.
-
 Análisis del perfil de fuerza en salto vertical. En proceso.
+
+Análisis de registros obtenidos en test con dinamómetros isocinéticos. En proceso.
 
 ## Licencia
 El código presentado se encuentra bajo [licencia MIT](https://opensource.org/licenses/mit-license.php)
