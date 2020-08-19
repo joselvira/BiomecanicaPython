@@ -19,7 +19,7 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 
 [Tipos de gráficas sofisticadas específicas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/GraficasSofisticadasEspecificas.ipynb)
 
-Uso de Blender como herramienta (gratuita) de digitalización. En proceso.
+[Uso de Blender como herramienta (gratuita) de digitalización](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Digitalizar_con_Blender_y_Python.ipynb)
 
 Análisis de datos de test com máquina isocinética. En proceso.
 
