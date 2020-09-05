@@ -19,13 +19,22 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 
 [Tipos de gráficas sofisticadas específicas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/GraficasSofisticadasEspecificas.ipynb)
 
+## Tratamiento de datos
 [Cómo transformar la orientación de las bases de datos](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Transformar_Bases_de_Datos.ipynb)
-
-[Uso de Blender como herramienta (gratuita) de digitalización](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Digitalizar_con_Blender_y_Python.ipynb)
 
 Análisis del perfil de fuerza en salto vertical. En proceso.
 
 Análisis de registros obtenidos en test con dinamómetros isocinéticos. En proceso.
+
+
+
+## Análisis cinemático del movimiento
+[Relación entre posición, velocidad y aceleración](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Relacion_Desplazamiento_Velocidad_Aceleracion.ipynb)
+
+[Uso de Blender como herramienta (gratuita) de digitalización](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Digitalizar_con_Blender_y_Python.ipynb)
+
+
+
 
 ## Licencia
 El código presentado se encuentra bajo [licencia MIT](https://opensource.org/licenses/mit-license.php)
