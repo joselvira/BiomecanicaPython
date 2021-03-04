@@ -14,12 +14,15 @@ import xarray as xr
 #import scipy.signal
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.2.0.0'
-__date__ = '13/12/2020'
+__version__ = 'v.2.0.1'
+__date__ = '10/01/2021'
 
 """
 Modificaciones:
-13/12/2020, v2.0.0
+    10/01/2021, v2.0.1
+            - ajustado para que pueda devolver xArray con Model Outputs
+
+    13/12/2020, v2.0.0
             - con el argumento formatoxArray se puede pedir que devuelva los datos en formato xArray
 """
 
@@ -27,6 +30,7 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
     """    
     Parameters
     ----------
+    versión : v2.0.1
     nombreArchivo : string
         ruta del archivo a abrir.
         
@@ -78,7 +82,7 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
                
         #Lo que viene detrás de la etiqueta es la frecuencia
         linea = f.readline()
-        frecuencia= int(linea)
+        frecuencia = int(linea)
         
         #Carga el nombre de las columnas
         #linea = f.readline()
@@ -101,7 +105,7 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
     #primero asigna los nombres según el propio archivo
     nomVars=['Frame', 'Sub Frame']
     for i in range(2,len(nomCols),3):
-        if "'" not in nomCols[i] and "''" not in nomCols[i]:            
+        if "'" not in nomCols[i] and "''" not in nomCols[i]: #elimina las posibles columnas de velocidad y aceleración
             nomVars.append(nomColsVar[i].split(':')[1]+'_'+nomCols[i])#X
             nomVars.append(nomColsVar[i].split(':')[1]+'_'+nomCols[i+1])#Y
             nomVars.append(nomColsVar[i].split(':')[1]+'_'+nomCols[i+2])#Z
@@ -132,23 +136,25 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
         data=np.stack([x,y,z])
         
         #Quita el identificador de la coordenada del final
-        canales = [i.split(':')[-1] for i in nomColsVar[2:len(nomCols):3]] #se pone hasta len(nomCols) porque a veces queda una línea al final suelta que descuadra
-                        
+        canales = dfReturn.filter(regex='|'.join(['_x','_X'])).columns.str.rstrip('|'.join(['_x','_X']))
+               
         n_frames = x.shape[1]
         channels = canales
         time = np.arange(start=0, stop=n_frames / frecuencia, step=1 / frecuencia)
         coords = {}
-        coords["axis"] = ['x', 'y', 'z']
-        coords["channel"] = channels
-        coords["time"] = time
+        coords['axis'] = ['x', 'y', 'z']
+        coords['channel'] = channels
+        coords['time'] = time
         
         daReturn=xr.DataArray(
                     data=data,
                     dims=('axis', 'channel', 'time'),
                     coords=coords,
                     name=nomBloque,
+                    attrs={'Frec':frecuencia}
                     #**kwargs,
                 )
+        
             
     
     if formatoxArray and returnFrec:
@@ -173,6 +179,28 @@ if __name__ == '__main__':
     
     #Con formato dataarray de xArray
     dfDatos, daDatos = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', formatoxArray=True)
-    
     dfDatos['Right_Toe_Z'].plot()
     daDatos.sel(channel='Right_Toe', axis='z').plot.line()
+    
+    
+    dfDatos, daDatos = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', formatoxArray=True)
+    dfDatos['AngArtLKnee_x'].plot()
+    daDatos.sel(channel='AngArtLKnee', axis='x').plot.line()
+    
+    
+ 
+    
+    nombreArchivo = Path('G:/Mi unidad/Investigacion/Proyectos/BikeFitting/Fatiga/Registros/TratadoCompletoPython/03_Abel_INI.csv')
+    _, daDatos = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', formatoxArray=True)
+    daDatos.sel(channel='AngArtLHip', axis='x').plot.line()
+    daDatos.rename({'channel':'var'})
+    
+    daDatos.coords
+    dfDatos.dims
+    daDatos.indexes
+    daDatos.variable
+    daDatos.name
+    daDatos.set_index(channel='AngArtCuello')
+    daDatos['nuevo'] = ('channel',['a','b','c'])
+    _.columns.shape
+    
