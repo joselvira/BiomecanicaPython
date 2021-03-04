@@ -14,7 +14,7 @@ En esta página encontrarás tutoriales que abarcan algunas de las posibilidades
 Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias.
 
 
-## Representación gráfica
+## Representación gráfica de datos
 [Cómo configurar gráficas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Como_configurar_graficas.ipynb)
 
 [Tipos de gráficas sofisticadas específicas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/GraficasSofisticadasEspecificas.ipynb)
