@@ -197,7 +197,9 @@ def filtrar_Butter_bandpass(DatOrig, Fr, Fclow, Fchigh, Orden=2.0, show=False, a
         
         
         
-#%%        
+# =============================================================================
+# %% PRUEBAS DE USO       
+# =============================================================================
 if __name__ == '__main__':
     
     np.random.seed(2)
@@ -261,8 +263,9 @@ if __name__ == '__main__':
     highcut = 1250.0
     
     T = 0.05
-    nsamples = T * fs
+    nsamples = int(T * fs)
     t = np.linspace(0, T, nsamples, endpoint=False)
+    
     a = 0.02 #amplitud de la señal
     f0 = 600.0 #frecuencia principal a extraer de la señal
     x = 0.1 * np.sin(2 * np.pi * 1.2 * np.sqrt(t))
@@ -278,3 +281,4 @@ if __name__ == '__main__':
     plt.hlines([-a, a], 0, T, 'r', linestyles='--')
     plt.title('Filtro bandpass')    
     plt.show()
+# %%
