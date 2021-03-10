@@ -15,7 +15,7 @@ import pandas as pd
 
 __author__ = 'Jose Luis Lopez Elvira'
 __version__ = '1.1.2'
-__date__ = '30/07/2020'
+__date__ = '10/03/2021'
 
 #%%
 def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcrit_Exacto=False, ax=None, show_bias_LOA=False, color_Lin=None, *args, **kwargs):
@@ -47,7 +47,7 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
     
     grafico Bland-Altman    
     Bias, media de las diferencias
-    LOA, limits of agreement, sumando el margen por encima y por debajo de la media.
+    LOA, limits of agreement.
     
     Example
     -------    
@@ -56,6 +56,10 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
 
     Version history
     ---------------
+    '1.1.3':
+            Exporta los LOA sin multiplicar por 2.
+            Representa el texto del bias y LOA en las líneas correspondientes.
+    
     '1.1.2':
             Corregidas las gráficas, con ax en lugar de plt. Antes no funcionaba con varios subplots.
             Con color_Lin se puede controlar el color de las líneas bias y LOA. Útil cuando se quieren solapar gráficas de varios conjuntos de datos.
@@ -177,10 +181,17 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
     ax.set_ylabel(etiquetaY)
         
     if show_bias_LOA:
-        ax.text(0.99, 0.99, 'Bias= {0:.3f}, LOA={1:.3f}'.format(md,t_crit*sd*2), fontsize=10,
-             horizontalalignment='right', verticalalignment='top', color='r', transform=ax.transAxes)
+        
+        ax.text(ax.get_xlim()[1], md+abs(md)*0.1, 'Bias {0:.3f}'.format(md), fontsize=10,
+             horizontalalignment='right', verticalalignment='bottom', transform=ax.transData)
+        
+        ax.text(ax.get_xlim()[1], (md+t_crit*sd)+abs(md+t_crit*sd)*0.05, 'LOA+ {0:.3f}'.format(md+t_crit*sd), fontsize=10,
+             horizontalalignment='right', verticalalignment='bottom', transform=ax.transData)
+        
+        ax.text(ax.get_xlim()[1], (md-t_crit*sd)+abs(md-t_crit*sd)*0.01, 'LOA- {0:.3f}'.format(md-t_crit*sd), fontsize=10,
+             horizontalalignment='right', verticalalignment='bottom', transform=ax.transData)
                 
-    return(md, t_crit*sd*2)
+    return(md, t_crit*sd)
 
 #%%        
 if __name__ == '__main__':
@@ -191,7 +202,8 @@ if __name__ == '__main__':
     metodo_B = np.array([8, 16, 30, 24, 39, 54, 40, 68, 72, 62, 122, 80, 181, 259, 275, 380, 320, 434, 479, 587, 626, 648, 738, 766, 793, 851, 871, 957, 1001, 960])
     	
     bland_altman_plot(metodo_A, metodo_B, regr=2, tcrit_Exacto=True)
-	
+    plt.show()
+
 	#%%
     #Crea un conjunto de medidas con dos instrumentos. El 2º es como el 1º pero con un error gausiano
     np.random.seed(1)
@@ -216,6 +228,7 @@ if __name__ == '__main__':
     #%%
     #Crea el Bland-Altman plot básico
     bland_altman_plot(instr1, instr2)
+    plt.show()
     
     #puede devolver los valores de bias (media de las diferencias) y limits of agreement, y también presentarlos en la gráfica
     bias, LOA = bland_altman_plot(instr1, instr2, show_bias_LOA=True)
@@ -462,3 +475,4 @@ if __name__ == '__main__':
     #plt.xlim(0.244, 0.252)
     ax.set_title('Gráfica2')
     
+# %%
