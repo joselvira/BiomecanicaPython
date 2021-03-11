@@ -192,15 +192,15 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
         
     if show_bias_LOA or show_text in ['bias_loa', 'publication', 'all']:
         if color_lin==None:
-            color_lin='blue'
+            color_lin='blue'            
         cuadroTexto=dict(facecolor='white', alpha=0.4, edgecolor='none', boxstyle='round,pad=0.1,rounding_size=.5')
-        ax.text(ax.get_xlim()[1], md+abs(md)*0.1, 'Bias {0:.2f}'.format(md), fontsize=12, color=color_lin,
+        ax.text(ax.get_xlim()[1], md+(ax.get_ylim()[1]-ax.get_ylim()[0])/1000, 'Bias {0:.2f}'.format(md), fontsize=12, color=color_lin,
              horizontalalignment='right', verticalalignment='bottom', bbox=cuadroTexto, transform=ax.transData, zorder=2)
         
-        ax.text(ax.get_xlim()[1], (md+t_crit*sd)+abs(md+t_crit*sd)*0.01, 'LOA {0:.2f}'.format(md+t_crit*sd), fontsize=10, color=color_lin,
+        ax.text(ax.get_xlim()[1], (md+t_crit*sd)+(ax.get_ylim()[1]-ax.get_ylim()[0])/1000, 'LOA {0:.2f}'.format(md+t_crit*sd), fontsize=10, color=color_lin,
              horizontalalignment='right', verticalalignment='bottom', bbox=cuadroTexto, transform=ax.transData)
         
-        ax.text(ax.get_xlim()[1], (md-t_crit*sd)+abs(md-t_crit*sd)*0.01, 'LOA {0:.2f}'.format(md-t_crit*sd), fontsize=10, color=color_lin,
+        ax.text(ax.get_xlim()[1], (md-t_crit*sd)+(ax.get_ylim()[1]-ax.get_ylim()[0])/1000, 'LOA {0:.2f}'.format(md-t_crit*sd), fontsize=10, color=color_lin,
              horizontalalignment='right', verticalalignment='bottom', bbox=cuadroTexto, transform=ax.transData)
     plt.tight_layout()
            
@@ -466,7 +466,7 @@ if __name__ == '__main__':
     fig, ax = plt.subplots(1, 2, figsize=(10,5), dpi=150) #, constrained_layout=True
    
     
-    bland_altman_plot(s1, s2, etiquetaCasos=False, ax=ax[0], lw=0, color='k', regr=1, s=40)
+    bland_altman_plot(s1, s2, etiquetaCasos=False, ax=ax[0], lw=0, color='k', regr=1, s=40, show_text='bias_loa')
     #plt.xlim(0.244, 0.252)
     ax[0].set_title('Gráfica1')
     
@@ -489,3 +489,4 @@ if __name__ == '__main__':
     ax.set_title('Gráfica2')
     
 # %%
+   
