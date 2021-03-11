@@ -14,7 +14,7 @@ import pandas as pd
 
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = '1.1.2'
+__version__ = '1.1.3'
 __date__ = '10/03/2021'
 
 #%%
