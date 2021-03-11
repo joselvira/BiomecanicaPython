@@ -18,7 +18,7 @@ __version__ = '1.1.2'
 __date__ = '10/03/2021'
 
 #%%
-def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcrit_Exacto=False, ax=None, show_bias_LOA=False, color_Lin=None, *args, **kwargs):
+def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcrit_Exacto=False, ax=None, show_text=None, show_bias_LOA=False, color_lin=None, *args, **kwargs):
     """Realiza gráfico de Bland-Altman para dos variables con medidas similares.
     Ejemplo de explicación en: https://www.medcalc.org/manual/blandaltman.php
     
@@ -33,10 +33,13 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
           con su p, de R2 y del error medio cuadrático.
     tcrit_Exacto : con False toma el valor t crítico = 1.96; con True lo 
           calcula a partir de n (#stats.t.ppf(q=0.975, df=n1 + n2-2))
-    ax : ejes para el grafico resultante.    
-    show_bias_LOA: True/False. Muestra el valor del bias y limits of agreement 
+    ax : ejes para el grafico resultante.
+    show_text : indica si muestra texto informativo.
+                Puede ser 'bias_loa', 'regr', 'publication', 'all'.
+                defoult=None.
+    show_bias_LOA : True/False. Muestra el valor del bias y limits of agreement 
           en el gráfico.
-    color_Lin: Si se quiere controlar el color de las líneas bias y LOA. Por 
+    color_lin: Si se quiere controlar el color de las líneas bias y LOA. Por 
           defecto (None), mantiene color negro para bias y gris para LOA.
           Útil cuando se quieren solapar varios grupos de datos en la misma
           gráfica.
@@ -59,10 +62,12 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
     '1.1.3':
             Exporta los LOA sin multiplicar por 2.
             Representa el texto del bias y LOA en las líneas correspondientes.
+            color_lin controla el color del texto de bias_loa.
+            Introducido parámetro show_text, que puede ser 'bias_loa', 'regr', 'publication' o 'all'. El parámetro show_bias_LOA
     
     '1.1.2':
             Corregidas las gráficas, con ax en lugar de plt. Antes no funcionaba con varios subplots.
-            Con color_Lin se puede controlar el color de las líneas bias y LOA. Útil cuando se quieren solapar gráficas de varios conjuntos de datos.
+            Con color_lin se puede controlar el color de las líneas bias y LOA. Útil cuando se quieren solapar gráficas de varios conjuntos de datos.
     '1.1.1':
             Cálculo R2 con sklearn, con statsmodels falla por la versión de scikit.
             Quita las filas con valores nulos.
@@ -130,34 +135,39 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
         MSE = mean_squared_error(y, y_predict)
         
         #Gráfica de least squares fit line
-        if color_Lin==None:
+        if color_lin==None:
             col='b'
         else:
-            col=color_Lin
+            col=color_lin
         sns.regplot(x=mean, y=diff, scatter=False, order=orden, ax=ax, line_kws={'color':col, 'alpha':0.6, 'lw':2})
         
-        ax.text(0.01, 0, 'r= {0:.3f}, p= {1:.3f}, $R^2$= {2:.3f} MSE= {3:.3f}'.format(r_value, p_value, R2, MSE), fontsize=10,
-                 horizontalalignment='left', verticalalignment='bottom', color='b', transform=ax.transAxes)
-                
+        cuadroTexto=dict(facecolor='white', alpha=0.4, edgecolor='none', boxstyle='round,pad=0.1,rounding_size=.5')
+        if show_text in ['regr', 'all']:
+            ax.text(0.01, 0, 'r= {0:.3f}, p= {1:.3f}, $R^2$= {2:.3f} MSE= {3:.3f}'.format(r_value, p_value, R2, MSE), fontsize=10,
+                     horizontalalignment='left', verticalalignment='bottom', color='b', bbox=cuadroTexto, transform=ax.transAxes)
+        elif show_text in ['publication']:
+            ax.text(0.01, 0, 'r= {0:.3f}'.format(r_value), fontsize=10,
+                     horizontalalignment='left', verticalalignment='bottom', color='b', bbox=cuadroTexto, transform=ax.transAxes)
+                    
         
     #dibuja la línea horizontal del cero
     ax.axhline(0.0, color='grey', linestyle='-', zorder=1, linewidth=1.0, solid_capstyle='round')
     
-    if color_Lin==None:
+    if color_lin==None:
         #dibuja la línea horizontal de la media
         ax.axhline(md, color='black', linestyle='-', zorder=1, linewidth=2.0, solid_capstyle='round')
         
-        #dibuja las líneas horizontales de los límites de confianza
+        #dibuja las líneas horizontales de los límites de acuerdo
         ax.axhline(md + t_crit*sd, color='gray', zorder=1, linestyle='--', dashes=(5, 2), dash_capstyle='round', linewidth=1.5)
         ax.axhline(md - t_crit*sd, color='gray', zorder=1, linestyle='--', dashes=(5, 2), dash_capstyle='round', linewidth=1.5)
                 
     else:
         #dibuja la línea horizontal de la media
-        ax.axhline(md, color=color_Lin, linestyle='-', zorder=1, linewidth=2.0, solid_capstyle='round')
+        ax.axhline(md, color=color_lin, linestyle='-', zorder=1, linewidth=2.0, solid_capstyle='round')
         
         #dibuja las líneas horizontales de los límites de confianza
-        ax.axhline(md + t_crit*sd, color=color_Lin, zorder=1, linestyle='--', dashes=(5, 2), dash_capstyle='round', linewidth=1.5)
-        ax.axhline(md - t_crit*sd, color=color_Lin, zorder=1, linestyle='--', dashes=(5, 2), dash_capstyle='round', linewidth=1.5)
+        ax.axhline(md + t_crit*sd, color=color_lin, zorder=1, linestyle='--', dashes=(5, 2), dash_capstyle='round', linewidth=1.5)
+        ax.axhline(md - t_crit*sd, color=color_lin, zorder=1, linestyle='--', dashes=(5, 2), dash_capstyle='round', linewidth=1.5)
         
         
         
@@ -180,17 +190,20 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
     ax.set_xlabel(etiquetaX)
     ax.set_ylabel(etiquetaY)
         
-    if show_bias_LOA:
+    if show_bias_LOA or show_text in ['bias_loa', 'publication', 'all']:
+        if color_lin==None:
+            color_lin='blue'
+        cuadroTexto=dict(facecolor='white', alpha=0.4, edgecolor='none', boxstyle='round,pad=0.1,rounding_size=.5')
+        ax.text(ax.get_xlim()[1], md+abs(md)*0.1, 'Bias {0:.2f}'.format(md), fontsize=12, color=color_lin,
+             horizontalalignment='right', verticalalignment='bottom', bbox=cuadroTexto, transform=ax.transData, zorder=2)
         
-        ax.text(ax.get_xlim()[1], md+abs(md)*0.1, 'Bias {0:.3f}'.format(md), fontsize=10,
-             horizontalalignment='right', verticalalignment='bottom', transform=ax.transData)
+        ax.text(ax.get_xlim()[1], (md+t_crit*sd)+abs(md+t_crit*sd)*0.01, 'LOA {0:.2f}'.format(md+t_crit*sd), fontsize=10, color=color_lin,
+             horizontalalignment='right', verticalalignment='bottom', bbox=cuadroTexto, transform=ax.transData)
         
-        ax.text(ax.get_xlim()[1], (md+t_crit*sd)+abs(md+t_crit*sd)*0.05, 'LOA+ {0:.3f}'.format(md+t_crit*sd), fontsize=10,
-             horizontalalignment='right', verticalalignment='bottom', transform=ax.transData)
-        
-        ax.text(ax.get_xlim()[1], (md-t_crit*sd)+abs(md-t_crit*sd)*0.01, 'LOA- {0:.3f}'.format(md-t_crit*sd), fontsize=10,
-             horizontalalignment='right', verticalalignment='bottom', transform=ax.transData)
-                
+        ax.text(ax.get_xlim()[1], (md-t_crit*sd)+abs(md-t_crit*sd)*0.01, 'LOA {0:.2f}'.format(md-t_crit*sd), fontsize=10, color=color_lin,
+             horizontalalignment='right', verticalalignment='bottom', bbox=cuadroTexto, transform=ax.transData)
+    plt.tight_layout()
+           
     return(md, t_crit*sd)
 
 #%%        
@@ -208,13 +221,13 @@ if __name__ == '__main__':
     #Crea un conjunto de medidas con dos instrumentos. El 2º es como el 1º pero con un error gausiano
     np.random.seed(1)
     mu1, sigma1 = 0, 10.5 # media y SD del instrumento 1
-    instr1 = np.random.normal(mu1, sigma1, 50)
+    instr1 = np.random.normal(mu1, sigma1, 10)
     
     mu2, sigma2 = 3.1, 10.1 # # media y SD que se añade al instrumento 1
-    instr2 = instr1+np.random.normal(mu2, sigma2, 50)
+    instr2 = instr1+np.random.normal(mu2, sigma2, 10)
     
-    instr1=pd.DataFrame(instr1)
-    instr2=pd.DataFrame(instr2)
+    #instr1=pd.DataFrame(instr1)
+    #instr2=pd.DataFrame(instr2)
     
     #Muestra los datos
     plt.plot(instr1, 'bo')
@@ -262,8 +275,8 @@ if __name__ == '__main__':
     
     #%%
     np.random.seed(9999)
-    m1 = np.random.random(100)
-    m2 = np.random.random(100)
+    m1 = np.random.random(500)
+    m2 = np.random.random(500)
     
     
     mediadif, LOA= bland_altman_plot(m1, m2, lw=0, color='k', s=40, show_bias_LOA=True)
@@ -271,10 +284,10 @@ if __name__ == '__main__':
     plt.show()
     
     #%%
-    Datos = pd.read_excel(r"E:\Programacion\Python\Mios\Estadistica\EjemploDatos-Bland-AltmanPlot.xlsx", 'Hoja1', index_col=None, na_values=[" "])
+    Datos = pd.read_excel(r"F:\Programacion\Python\Mios\Estadistica\EjemploDatos-Bland-AltmanPlot.xlsx", 'Hoja1', index_col=None, na_values=[" "])
     
         
-    bland_altman_plot(Datos.iloc[:,0], Datos.iloc[:,1], lw=0, color='k', s=40, show_bias_LOA=True)
+    bland_altman_plot(Datos.iloc[:,0], Datos.iloc[:,1], lw=0, color='k', s=40, show_text='bias_loa')
     plt.title('Bland-Altman Plot')
     plt.show()
     
@@ -326,7 +339,7 @@ if __name__ == '__main__':
     s2=pd.Series(s2)
         
     fig, ax = plt.subplots(1, 1, figsize=(4,3), dpi=150)
-    bland_altman_plot(s1, s2, ax=ax, lw=0, color='k', s=40, regr=1)
+    bland_altman_plot(s1, s2, ax=ax, lw=0, color='k', s=40, regr=1, show_text='publication')
     plt.title('proporcionales')
     plt.show()
     
@@ -342,7 +355,7 @@ if __name__ == '__main__':
     s2=pd.Series(s2)
         
     fig, ax = plt.subplots(1, 1, figsize=(4,3), dpi=150)
-    bland_altman_plot(s1, s2, ax=ax, lw=0, color='k', s=40, regr=3)
+    bland_altman_plot(s1, s2, ax=ax, lw=0, color='k', s=40, regr=3, show_text='all')
     plt.title('proporcionales')
     plt.show()
     #%%###############################################
@@ -467,11 +480,11 @@ if __name__ == '__main__':
     fig, ax = plt.subplots(figsize=(5,5), dpi=150) #, constrained_layout=True
    
     
-    bland_altman_plot(s1, s2, etiquetaCasos=False, ax=ax, regr=1, s=70, lw=0, color='b', alpha=0.6, color_Lin='b')
+    bland_altman_plot(s1, s2, etiquetaCasos=False, ax=ax, regr=1, s=70, lw=0, color='b', alpha=0.6, color_lin='b', show_text='bias_loa')
     #plt.xlim(0.244, 0.252)
         
     
-    bland_altman_plot(s12, s22, etiquetaCasos=False, ax=ax, regr=1, s=70, lw=0, color='r', alpha=0.6, color_Lin='r')
+    bland_altman_plot(s12, s22, etiquetaCasos=False, ax=ax, regr=1, s=70, lw=0, color='r', alpha=0.6, color_lin='r', show_text='bias_loa')
     #plt.xlim(0.244, 0.252)
     ax.set_title('Gráfica2')
     
