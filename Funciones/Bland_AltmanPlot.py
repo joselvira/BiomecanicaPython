@@ -136,18 +136,30 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
         
         #Gráfica de least squares fit line
         if color_lin==None:
+<<<<<<< Updated upstream
             col='b'
+=======
+            col='black'
+>>>>>>> Stashed changes
         else:
             col=color_lin
         sns.regplot(x=mean, y=diff, scatter=False, order=orden, ax=ax, line_kws={'color':col, 'alpha':0.6, 'lw':2})
         
         cuadroTexto=dict(facecolor='white', alpha=0.4, edgecolor='none', boxstyle='round,pad=0.1,rounding_size=.5')
         if show_text in ['regr', 'all']:
+<<<<<<< Updated upstream
             ax.text(0.01, 0, 'r= {0:.3f}, p= {1:.3f}, $R^2$= {2:.3f} MSE= {3:.3f}'.format(r_value, p_value, R2, MSE), fontsize=10,
                      horizontalalignment='left', verticalalignment='bottom', color='b', bbox=cuadroTexto, transform=ax.transAxes)
         elif show_text in ['publication']:
             ax.text(0.01, 0, 'r= {0:.3f}'.format(r_value), fontsize=10,
                      horizontalalignment='left', verticalalignment='bottom', color='b', bbox=cuadroTexto, transform=ax.transAxes)
+=======
+            ax.text(0.02, 0.01, 'r= {0:.3f}, p= {1:.3f}, $R^2$= {2:.3f} MSE= {3:.3f}'.format(r_value, p_value, R2, MSE), fontsize=10,
+                     horizontalalignment='left', verticalalignment='bottom', color=col, bbox=cuadroTexto, transform=ax.transAxes, zorder=2)
+        elif show_text in ['publication']:
+            ax.text(0.02, 0.01, 'r= {0:.3f}'.format(r_value), fontsize=10,
+                     horizontalalignment='left', verticalalignment='bottom', color=col, bbox=cuadroTexto, transform=ax.transAxes, zorder=2)
+>>>>>>> Stashed changes
                     
         
     #dibuja la línea horizontal del cero
@@ -190,9 +202,15 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
     ax.set_xlabel(etiquetaX)
     ax.set_ylabel(etiquetaY)
         
+<<<<<<< Updated upstream
     if show_bias_LOA or show_text in ['bias_loa', 'publication', 'all']:
         if color_lin==None:
             color_lin='blue'            
+=======
+    if show_text in ['bias_loa', 'publication', 'all'] or show_bias_LOA:
+        if color_lin==None:
+            color_lin='black'            
+>>>>>>> Stashed changes
         cuadroTexto=dict(facecolor='white', alpha=0.4, edgecolor='none', boxstyle='round,pad=0.1,rounding_size=.5')
         ax.text(ax.get_xlim()[1], md+(ax.get_ylim()[1]-ax.get_ylim()[0])/1000, 'Bias {0:.2f}'.format(md), fontsize=12, color=color_lin,
              horizontalalignment='right', verticalalignment='bottom', bbox=cuadroTexto, transform=ax.transData, zorder=2)
@@ -279,7 +297,7 @@ if __name__ == '__main__':
     m2 = np.random.random(500)
     
     
-    mediadif, LOA= bland_altman_plot(m1, m2, lw=0, color='k', s=40, show_bias_LOA=True)
+    mediadif, LOA= bland_altman_plot(m1, m2, lw=0, color='k', s=40, show_text='all', regr=1, color_lin='grey')
     plt.title('Bland-Altman Plot')
     plt.show()
     
