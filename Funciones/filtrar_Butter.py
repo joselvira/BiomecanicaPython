@@ -9,7 +9,9 @@ Función de paso bajo o alto y función de bandpass.
 from __future__ import division, print_function
 import numpy as np
 import pandas as pd
+import xarray as xr
 import scipy.signal
+
 
 __author__ = 'Jose Luis Lopez Elvira'
 __version__ = 'v.1.3'
@@ -22,7 +24,7 @@ def filtrar_Butter(DatOrig, Fr, Fc, Orden=2.0, Tipo='low', ReturnRMS=False, show
     """    
     Parameters
     ----------
-    DatOrig : array 1D o dataframe de pandas en 2D.
+    DatOrig : array 1D o dataframe de pandas en 2D o xarray.
             Datos originales a filtrar.
     Fr : frecuencia de registro.
     Fc : frecuencia de corte del filtro.
@@ -80,6 +82,14 @@ def filtrar_Butter(DatOrig, Fr, Fc, Orden=2.0, Tipo='low', ReturnRMS=False, show
     elif isinstance(DatOrig, pd.Series):
         DatFilt = pd.Series(scipy.signal.filtfilt(b, a, DatOrig), index=DatOrig.index, name=DatOrig.name)
         RMS = np.linalg.norm(DatFilt-DatOrig) / np.sqrt(len(DatOrig))
+    
+    elif isinstance(DatOrig, xr.DataArray):
+        #pip install xskillscore
+        import xskillscore as xs
+        DatFilt = xr.apply_ufunc(scipy.signal.filtfilt, b, a, DatOrig)
+        RMS = xs.rmse(DatFilt, DatOrig, dim='time')
+        #Investigar para hacer el RMSE directamente sin necesitar la librería xskillscore
+        #CON XARRAY NO FUNCIONAN LOS GRÁFICOS
         
     else: #si los datos no son pandas dataframe
         DatFilt = scipy.signal.filtfilt(b, a, DatOrig)
@@ -197,9 +207,7 @@ def filtrar_Butter_bandpass(DatOrig, Fr, Fclow, Fchigh, Orden=2.0, show=False, a
         
         
         
-# =============================================================================
-# %% PRUEBAS DE USO       
-# =============================================================================
+#%%        
 if __name__ == '__main__':
     
     np.random.seed(2)
@@ -263,9 +271,8 @@ if __name__ == '__main__':
     highcut = 1250.0
     
     T = 0.05
-    nsamples = int(T * fs)
+    nsamples = T * fs
     t = np.linspace(0, T, nsamples, endpoint=False)
-    
     a = 0.02 #amplitud de la señal
     f0 = 600.0 #frecuencia principal a extraer de la señal
     x = 0.1 * np.sin(2 * np.pi * 1.2 * np.sqrt(t))
@@ -281,4 +288,40 @@ if __name__ == '__main__':
     plt.hlines([-a, a], 0, T, 'r', linestyles='--')
     plt.title('Filtro bandpass')    
     plt.show()
-# %%
+    
+    ###############################
+    #%%prueba con xarray
+    t = np.arange(0, 2, 1/1000)
+    #offset vertical
+    of=[0,0, 0,0]    
+    #ampitudes
+    a=[3,0.5, 5,0.3]    
+    #frecuencias
+    f=[1,60, 3,40]    
+    #phase angle, ángulo al inicio del tiempo
+    pa=[0,0, 0,0]    
+    ondas = pd.DataFrame(np.array([of[i] + a[i]*np.sin(2*np.pi*f[i]*t + pa[i]) for i in range(len(a))]).T)
+        
+    Onda=pd.DataFrame({'Onda1':ondas[0]+ondas[1], 'Onda2':ondas[2]+ondas[3]})
+    
+    
+    da = xr.DataArray(data=np.array(Onda).T,
+        
+        dims=['channel', 'time'],
+        coords={'channel': Onda.columns,
+                'time': np.arange(0, len(Onda)/1000, 1/1000),                
+                },
+    )
+    o = da.isel(channel=-1)
+    da.plot.line(x='time') #sin filtrar
+    da.isel(channel=1).plot()
+    plt.show()
+    
+    o_filt, RMSEda = filtrar_Butter(da, 1000, 10, 2, ReturnRMS=True, show=False)
+    da.plot.line(x='time')#sin filtrar
+    o_filt.plot.line(x='time') #filtrado
+    plt.show()
+    
+    #Al compararlo con el pandas sale igual
+    dfOndaFilt, RMSEdf = filtrar_Butter(Onda, 1000, 10, 2, ReturnRMS=True)
+    
