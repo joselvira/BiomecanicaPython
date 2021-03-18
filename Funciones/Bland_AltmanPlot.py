@@ -14,11 +14,11 @@ import pandas as pd
 
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = '1.1.3'
-__date__ = '10/03/2021'
+__version__ = '1.1.4'
+__date__ = '18/03/2021'
 
 #%%
-def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcrit_Exacto=False, ax=None, show_text=None, show_bias_LOA=False, color_lin=None, *args, **kwargs):
+def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcrit_Exacto=False, n_decimales=1, ax=None, show_text=None, show_bias_LOA=False, color_lin=None, *args, **kwargs):
     """Realiza gráfico de Bland-Altman para dos variables con medidas similares.
     Ejemplo de explicación en: https://www.medcalc.org/manual/blandaltman.php
     
@@ -33,6 +33,7 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
           con su p, de R2 y del error medio cuadrático.
     tcrit_Exacto : con False toma el valor t crítico = 1.96; con True lo 
           calcula a partir de n (#stats.t.ppf(q=0.975, df=n1 + n2-2))
+    n_decimales : especifica el número de decimales a mostrar en BIAS y LOA.
     ax : ejes para el grafico resultante.
     show_text : indica si muestra texto informativo.
                 Puede ser 'bias_loa', 'regr', 'publication', 'all'.
@@ -59,6 +60,9 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
 
     Version history
     ---------------
+    '1.1.4':
+            Añadido el argumento n_decimales para poder especificar el número de decimales cuando muesra el BIAS y LOA.
+    
     '1.1.3':
             Exporta los LOA sin multiplicar por 2.
             Representa el texto del bias y LOA en las líneas correspondientes.
@@ -136,31 +140,20 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
         
         #Gráfica de least squares fit line
         if color_lin==None:
-<<<<<<< Updated upstream
-            col='b'
-=======
             col='black'
->>>>>>> Stashed changes
+
         else:
             col=color_lin
         sns.regplot(x=mean, y=diff, scatter=False, order=orden, ax=ax, line_kws={'color':col, 'alpha':0.6, 'lw':2})
         
         cuadroTexto=dict(facecolor='white', alpha=0.4, edgecolor='none', boxstyle='round,pad=0.1,rounding_size=.5')
         if show_text in ['regr', 'all']:
-<<<<<<< Updated upstream
-            ax.text(0.01, 0, 'r= {0:.3f}, p= {1:.3f}, $R^2$= {2:.3f} MSE= {3:.3f}'.format(r_value, p_value, R2, MSE), fontsize=10,
-                     horizontalalignment='left', verticalalignment='bottom', color='b', bbox=cuadroTexto, transform=ax.transAxes)
-        elif show_text in ['publication']:
-            ax.text(0.01, 0, 'r= {0:.3f}'.format(r_value), fontsize=10,
-                     horizontalalignment='left', verticalalignment='bottom', color='b', bbox=cuadroTexto, transform=ax.transAxes)
-=======
             ax.text(0.02, 0.01, 'r= {0:.3f}, p= {1:.3f}, $R^2$= {2:.3f} MSE= {3:.3f}'.format(r_value, p_value, R2, MSE), fontsize=10,
                      horizontalalignment='left', verticalalignment='bottom', color=col, bbox=cuadroTexto, transform=ax.transAxes, zorder=2)
         elif show_text in ['publication']:
             ax.text(0.02, 0.01, 'r= {0:.3f}'.format(r_value), fontsize=10,
                      horizontalalignment='left', verticalalignment='bottom', color=col, bbox=cuadroTexto, transform=ax.transAxes, zorder=2)
->>>>>>> Stashed changes
-                    
+                   
         
     #dibuja la línea horizontal del cero
     ax.axhline(0.0, color='grey', linestyle='-', zorder=1, linewidth=1.0, solid_capstyle='round')
@@ -202,23 +195,18 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
     ax.set_xlabel(etiquetaX)
     ax.set_ylabel(etiquetaY)
         
-<<<<<<< Updated upstream
-    if show_bias_LOA or show_text in ['bias_loa', 'publication', 'all']:
-        if color_lin==None:
-            color_lin='blue'            
-=======
     if show_text in ['bias_loa', 'publication', 'all'] or show_bias_LOA:
         if color_lin==None:
             color_lin='black'            
->>>>>>> Stashed changes
+        
         cuadroTexto=dict(facecolor='white', alpha=0.4, edgecolor='none', boxstyle='round,pad=0.1,rounding_size=.5')
-        ax.text(ax.get_xlim()[1], md+(ax.get_ylim()[1]-ax.get_ylim()[0])/1000, 'Bias {0:.2f}'.format(md), fontsize=12, color=color_lin,
+        ax.text(ax.get_xlim()[1], md+(ax.get_ylim()[1]-ax.get_ylim()[0])/1000, 'Bias {0:.{dec}f}'.format(md, dec=n_decimales), fontsize=12, color=color_lin,
              horizontalalignment='right', verticalalignment='bottom', bbox=cuadroTexto, transform=ax.transData, zorder=2)
         
-        ax.text(ax.get_xlim()[1], (md+t_crit*sd)+(ax.get_ylim()[1]-ax.get_ylim()[0])/1000, 'LOA {0:.2f}'.format(md+t_crit*sd), fontsize=10, color=color_lin,
+        ax.text(ax.get_xlim()[1], (md+t_crit*sd)+(ax.get_ylim()[1]-ax.get_ylim()[0])/1000, 'LOA {0:.{dec}f}'.format(md+t_crit*sd, dec=n_decimales), fontsize=10, color=color_lin,
              horizontalalignment='right', verticalalignment='bottom', bbox=cuadroTexto, transform=ax.transData)
         
-        ax.text(ax.get_xlim()[1], (md-t_crit*sd)+(ax.get_ylim()[1]-ax.get_ylim()[0])/1000, 'LOA {0:.2f}'.format(md-t_crit*sd), fontsize=10, color=color_lin,
+        ax.text(ax.get_xlim()[1], (md-t_crit*sd)+(ax.get_ylim()[1]-ax.get_ylim()[0])/1000, 'LOA {0:.{dec}f}'.format(md-t_crit*sd, dec=n_decimales), fontsize=10, color=color_lin,
              horizontalalignment='right', verticalalignment='bottom', bbox=cuadroTexto, transform=ax.transData)
     plt.tight_layout()
            
@@ -484,7 +472,7 @@ if __name__ == '__main__':
     fig, ax = plt.subplots(1, 2, figsize=(10,5), dpi=150) #, constrained_layout=True
    
     
-    bland_altman_plot(s1, s2, etiquetaCasos=False, ax=ax[0], lw=0, color='k', regr=1, s=40, show_text='bias_loa')
+    bland_altman_plot(s1, s2, etiquetaCasos=False, ax=ax[0], lw=0, color='k', regr=1, s=40, show_text='bias_loa', n_decimales=3)
     #plt.xlim(0.244, 0.252)
     ax[0].set_title('Gráfica1')
     
