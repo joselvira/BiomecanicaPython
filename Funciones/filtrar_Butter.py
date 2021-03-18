@@ -14,8 +14,8 @@ import scipy.signal
 
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.1.3'
-__date__ = '18/07/2019'
+__version__ = 'v.1.4'
+__date__ = '26/02/2021'
 
 # =============================================================================
 # %% Función filtrar low o High pass
@@ -207,7 +207,9 @@ def filtrar_Butter_bandpass(DatOrig, Fr, Fclow, Fchigh, Orden=2.0, show=False, a
         
         
         
-#%%        
+# =============================================================================
+# %% PRUEBAS
+# =============================================================================
 if __name__ == '__main__':
     
     np.random.seed(2)
