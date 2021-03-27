@@ -84,10 +84,14 @@ def filtrar_Butter(DatOrig, Fr, Fc, Orden=2.0, Tipo='low', ReturnRMS=False, show
         RMS = np.linalg.norm(DatFilt-DatOrig) / np.sqrt(len(DatOrig))
     
     elif isinstance(DatOrig, xr.DataArray):
-        #pip install xskillscore
-        import xskillscore as xs
         DatFilt = xr.apply_ufunc(scipy.signal.filtfilt, b, a, DatOrig)
-        RMS = xs.rmse(DatFilt, DatOrig, dim='time')
+        RMS=pd.DataFrame()
+        for i in range(DatOrig.shape[0]):
+            RMS.at[0, i]=np.linalg.norm(DatFilt[i,:]-DatOrig[i,:]) / np.sqrt(len(DatOrig[i,:]))
+            #xr.apply_ufunc(np.linalg.norm, DatFilt[0,:], DatOrig[0,:])
+        #pip install xskillscore
+        #import xskillscore as xs        
+        #RMS = xs.rmse(DatFilt, DatOrig, dim='time')
         #Investigar para hacer el RMSE directamente sin necesitar la librería xskillscore
         #CON XARRAY NO FUNCIONAN LOS GRÁFICOS
         
@@ -318,6 +322,8 @@ if __name__ == '__main__':
     da.plot.line(x='time') #sin filtrar
     da.isel(channel=1).plot()
     plt.show()
+    
+    np.linalg.norm(da.isel(channel=1)-da.isel(channel=0)) / np.sqrt(len(da.isel(channel=0)))
     
     o_filt, RMSEda = filtrar_Butter(da, 1000, 10, 2, ReturnRMS=True, show=False)
     da.plot.line(x='time')#sin filtrar
