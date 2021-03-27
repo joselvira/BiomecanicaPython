@@ -14,16 +14,20 @@ import xarray as xr
 #import scipy.signal
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.2.0.1'
-__date__ = '10/01/2021'
+__version__ = 'v.2.1.0'
+__date__ = '21/03/2021'
 
 """
 Modificaciones:
+    21/03/2021, v2.1.0
+            - Cambiado lector del bloque de archivos por pd.read_csv con número de columnas delimitado a los que carga en las variables (quitando los de velocidad y aceleración)
+            - Solucionado fallo al leer frecuencia cuando terminaba la línea rellenando con separadores (como al exportar en Excel)
+
     10/01/2021, v2.0.1
-            - ajustado para que pueda devolver xArray con Model Outputs
+            - Ajustado para que pueda devolver xArray con Model Outputs
 
     13/12/2020, v2.0.0
-            - con el argumento formatoxArray se puede pedir que devuelva los datos en formato xArray
+            - Con el argumento formatoxArray se puede pedir que devuelva los datos en formato xArray
 """
 
 def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', returnFrec=False, formatoxArray=False):
@@ -82,7 +86,7 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
                
         #Lo que viene detrás de la etiqueta es la frecuencia
         linea = f.readline()
-        frecuencia = int(linea)
+        frecuencia = int(linea.replace(separador,'')) #quita el separador para los casos en los que el archivo ha sido guardado con Excel (completa línea con separador)
         
         #Carga el nombre de las columnas
         #linea = f.readline()
@@ -113,15 +117,25 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
     # [i for i in nomColsVar if "'" in i]
     # nomColsVar = [i for i in nomColsVar if "'" not in i]
         
-    
-    
+    #Cuenta el nº de líneas totales
+    finArchivo=0
+    with open(nombreArchivo, mode='rt') as f:
+        for i in f:
+            finArchivo+=1
     
     #carga todos los datos
-    provisional= np.genfromtxt(nombreArchivo, skip_header= inicioBloque+5, max_rows=finBloque-inicioBloque-1, delimiter=separador)
+    #ANTES DE EMPEZAR A CARGAR DATOS, COMPROBAR QUE LA PRIMERA LÍNEA TIENE DATOS, SI NO LO LEE MAL    
+    #provisional= np.genfromtxt(nombreArchivo, skip_header= inicioBloque+5, max_rows=finBloque-inicioBloque-1, delimiter=separador, missing_values='', filling_values=np.nan, invalid_raise=True)
     #provisional=provisional[:, :len(nomVars)] #recorta solo hasta las variables 
     
     #Convierte los datos en pandas dataframe. Pasa solo los que no son de velocidad o aceleración
-    dfReturn = pd.DataFrame(provisional[:, :len(nomVars)], columns=nomVars)
+    #dfReturn = pd.DataFrame(provisional[:, :len(nomVars)], columns=nomVars)
+    
+    #Con pandas directamente funciona??
+    dfReturn = pd.read_csv(nombreArchivo, delimiter=separador, header=None, skiprows=inicioBloque+5, skipfooter=finArchivo-finBloque-5, usecols=range(len(nomVars)), engine='python')
+    #dfReturn = dfReturn.iloc[:, :len(nomVars)] #se queda solo con las columnas de las variables, quita las de velocidad si las hay
+    dfReturn.columns=nomVars
+    
     
     # #Elimina las columnas de velocidad y aceleración, si las hay
     # borrarColsVA = dfReturn.filter(regex='|'.join(["'", "''"])).columns
@@ -171,12 +185,37 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
 # =============================================================================
 if __name__ == '__main__':
     from pathlib import Path
-    ruta_Archivo = r'G:\Mi unidad\Investigacion\Proyectos\BikeFitting\Fatiga\Datos Cinematica Congreso Estudiantes\JUNTOS\01_Carrillo_FIN.csv'
+    ruta_Archivo = r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconSinHuecos_01_Carrillo_FIN.csv'
+    nombreArchivo = Path(ruta_Archivo)    
+    dfDatos = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs')
+    dfDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', returnFrec=True)
+    
+    #Con Models al final
+    ruta_Archivo = r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconSinHuecos_01_Carrillo_FIN_ModeloAlFinal.csv'
     nombreArchivo = Path(ruta_Archivo)
     
     dfDatos = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs')
     dfDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', returnFrec=True)
+       
     
+    #Sin fila inicial en blanco
+    ruta_Archivo = r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconSinHuecos_01_Carrillo_FIN_SinFilaBlancoInicial.csv'
+    nombreArchivo = Path(ruta_Archivo)
+    
+    dfDatos = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs')
+    dfDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', returnFrec=True)
+        
+    
+    #Solo bloque modelos
+    ruta_Archivo = r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconSinHuecos_01_Carrillo_FIN_2.csv'
+    nombreArchivo = Path(ruta_Archivo)
+    dfDatos = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs')
+    dfDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', returnFrec=True)
+    
+    
+    ruta_Archivo = r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconSinHuecos_01_Carrillo_FIN.csv'
+    nombreArchivo = Path(ruta_Archivo)    
+
     #Con formato dataarray de xArray
     dfDatos, daDatos = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', formatoxArray=True)
     dfDatos['Right_Toe_Z'].plot()
@@ -188,19 +227,10 @@ if __name__ == '__main__':
     daDatos.sel(channel='AngArtLKnee', axis='x').plot.line()
     
     
- 
+    #Archivo con huecos
+    ruta_Archivo = r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconConHuecos_S01_WHF_T1_L04.csv'
+    nombreArchivo = Path(ruta_Archivo)
+    dfDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', returnFrec=True)
+    dfDatos.plot()
     
-    nombreArchivo = Path('G:/Mi unidad/Investigacion/Proyectos/BikeFitting/Fatiga/Registros/TratadoCompletoPython/03_Abel_INI.csv')
-    _, daDatos = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', formatoxArray=True)
-    daDatos.sel(channel='AngArtLHip', axis='x').plot.line()
-    daDatos.rename({'channel':'var'})
-    
-    daDatos.coords
-    dfDatos.dims
-    daDatos.indexes
-    daDatos.variable
-    daDatos.name
-    daDatos.set_index(channel='AngArtCuello')
-    daDatos['nuevo'] = ('channel',['a','b','c'])
-    _.columns.shape
     
