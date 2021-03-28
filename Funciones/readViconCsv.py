@@ -14,12 +14,15 @@ import xarray as xr
 #import scipy.signal
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.2.1.0'
-__date__ = '21/03/2021'
+__version__ = 'v.2.1.1'
+__date__ = '28/03/2021'
 
 """
 Modificaciones:
-    21/03/2021, v2.1.0
+    28/03/2021, v2.1.1
+            - Mejorada lectura con Pandas. Ahora puede cargar archivos que empiezan sin datos en las primeras líneas.
+
+	21/03/2021, v2.1.0
             - Cambiado lector del bloque de archivos por pd.read_csv con número de columnas delimitado a los que carga en las variables (quitando los de velocidad y aceleración)
             - Solucionado fallo al leer frecuencia cuando terminaba la línea rellenando con separadores (como al exportar en Excel)
 
@@ -68,7 +71,6 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
     >>> daDatos = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', formatoxArray=True)
 
     """   
-    daReturn=xr.DataArray()
     
     with open(nombreArchivo, mode='rt') as f:
         numLinea=0
@@ -124,16 +126,17 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
             finArchivo+=1
     
     #carga todos los datos
-    #ANTES DE EMPEZAR A CARGAR DATOS, COMPROBAR QUE LA PRIMERA LÍNEA TIENE DATOS, SI NO LO LEE MAL    
+    #CON GENFROMTXT FALLA SI NO EMPIEZA LA PRIMERA LÍNEA CON DATOS
     #provisional= np.genfromtxt(nombreArchivo, skip_header= inicioBloque+5, max_rows=finBloque-inicioBloque-1, delimiter=separador, missing_values='', filling_values=np.nan, invalid_raise=True)
     #provisional=provisional[:, :len(nomVars)] #recorta solo hasta las variables 
     
     #Convierte los datos en pandas dataframe. Pasa solo los que no son de velocidad o aceleración
     #dfReturn = pd.DataFrame(provisional[:, :len(nomVars)], columns=nomVars)
-    
-    #Con pandas directamente funciona??
-    dfReturn = pd.read_csv(nombreArchivo, delimiter=separador, header=None, skiprows=inicioBloque+5, skipfooter=finArchivo-finBloque-5, usecols=range(len(nomVars)), engine='python')
     #dfReturn = dfReturn.iloc[:, :len(nomVars)] #se queda solo con las columnas de las variables, quita las de velocidad si las hay
+    
+    #Con pandas directamente funciona (para evitar error si primera línea no son datos, lee la fina de las unidades y luego la quita)
+    dfReturn = pd.read_csv(nombreArchivo, delimiter=separador, header=None, skiprows=inicioBloque+4, skipfooter=finArchivo-finBloque-5, usecols=range(len(nomVars)), engine='python')
+    dfReturn = dfReturn.drop(index=0).reset_index(drop=True).astype(float)
     dfReturn.columns=nomVars
     
     
@@ -143,6 +146,8 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
     
     #Si hace falta lo pasa a xArray
     if formatoxArray:
+        daReturn=xr.DataArray()
+    
         #transforma los datos en xarray
         x=dfReturn.filter(regex='|'.join(['_x','_X'])).to_numpy().T
         y=dfReturn.filter(regex='|'.join(['_y','_Y'])).to_numpy().T
@@ -213,10 +218,15 @@ if __name__ == '__main__':
     dfDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', returnFrec=True)
     
     
+    #Con hueco muy grande al inicio
+    ruta_Archivo = r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconConHuecoInicio_S27_WHT_T2_L01.csv'
+    nombreArchivo = Path(ruta_Archivo)
+    dfDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', returnFrec=True)
+    dfDatos['R5Meta_Z'].plot()
+
+    #Con formato dataarray de xArray    
     ruta_Archivo = r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconSinHuecos_01_Carrillo_FIN.csv'
     nombreArchivo = Path(ruta_Archivo)    
-
-    #Con formato dataarray de xArray
     dfDatos, daDatos = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', formatoxArray=True)
     dfDatos['Right_Toe_Z'].plot()
     daDatos.sel(channel='Right_Toe', axis='z').plot.line()
