@@ -84,7 +84,7 @@ def filtrar_Butter(DatOrig, Fr, Fc, Orden=2.0, Tipo='low', ReturnRMS=False, show
         RMS = np.linalg.norm(DatFilt-DatOrig) / np.sqrt(len(DatOrig))
     
     elif isinstance(DatOrig, xr.DataArray):
-        DatFilt = xr.apply_ufunc(scipy.signal.filtfilt, b, a, DatOrig)
+        DatFilt = xr.apply_ufunc(scipy.signal.filtfilt, b, a, DatOrig.dropna(dim='time')) #se asume que hay una dimensión tiempo
         RMS=pd.DataFrame()
         for i in range(DatOrig.shape[0]):
             RMS.at[0, i]=np.linalg.norm(DatFilt[i,:]-DatOrig[i,:]) / np.sqrt(len(DatOrig[i,:]))
@@ -331,5 +331,25 @@ if __name__ == '__main__':
     plt.show()
     
     #Al compararlo con el pandas sale igual
-    dfOndaFilt, RMSEdf = filtrar_Butter(Onda, 1000, 10, 2, ReturnRMS=True)
+    dfOndaFilt, RMSEdf = filtrar_Butter(Onda, 1000, 10, 2, ReturnRMS=True, show=True)
     
+    #%% Con xarray con varias dimensiones
+    
+        
+    df_multiindex = pd.DataFrame({'nombre': list('xxxxxxxxyyyyyyyyzzzz'),
+                                  #'test' : ['AP', 'ML']
+                                  'repe' : [1,1,1,1,2,2,2,2,1,1,1,1,2,2,2,2,1,1,1,1],
+                                    'time': [0,1,2,3]*5,
+                                    'F' : [10,9,12,11,15,12,19,17,  10,15,8,11,5,4,18,14,  2,5,4,3]})
+    df_multiindex = df_multiindex.set_index(['nombre', 'repe', 'time'])
+
+        
+    da=df_multiindex.to_xarray().to_array()
+    
+    #cuando tienen duraciones distintas y terminana en nan, hay que rellenar con interpolado y después dejar nan donde los había en el original
+    da_filt = filtrar_Butter(da.interpolate_na(dim='time', method='linear', fill_value='extrapolate'), Fr=100, Fc=2, Orden=2, Tipo='low')
+    da_filt = da_filt.where(xr.where(np.isnan(da), False, True), np.nan)
+
+    #otras pruebas
+    da.drop('time').groupby('nombre').map(filtrar_Butter, Fr=1000, Fc=10, Orden=2, show=False) #no va
+    da.pipe(filtrar_Butter, Fr=1000, Fc=10, Orden=2, show=False)
