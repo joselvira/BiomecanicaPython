@@ -9,10 +9,16 @@ Python es uno de los lenguajes de programación más emergentes hoy en día. Se 
   - Realizar tratamiento de datos avanzados.
   - Realizar estadísticas, desde descriptivas a sofisticadas.
   - etc.
-  
+
 En esta página encontrarás tutoriales que abarcan algunas de las posibilidades que permite Python para facilitar la vida del biomecánico (entre otros). Espero que te resulten interesantes y útiles.
 Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias.
 
+## Introducción al Python
+[Tipos de variables en Python](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Tipos_de_variables_en_Python.ipynb)
+
+[Repetición de tareas. Los bucles](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/RepeticionTareas_Bucles.ipynb)
+
+[Manejo de archivos y carpetas para cargar y guardar datos](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/ManejoArchivosCarpetas.ipynb)
 
 ## Representación gráfica de datos
 [Cómo configurar gráficas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Como_configurar_graficas.ipynb)
