@@ -14,6 +14,10 @@ En esta página encontrarás tutoriales que abarcan algunas de las posibilidades
 Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias.
 
 ## Introducción al Python
+[Operadores en Python](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Operadores.ipynb)
+
+[Funciones nativas en Python](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Funciones_nativas.ipynb)
+
 [Tipos de variables en Python](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Tipos_de_variables_en_Python.ipynb)
 
 [Repetición de tareas. Los bucles](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/RepeticionTareas_Bucles.ipynb)
