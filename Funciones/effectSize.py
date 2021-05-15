@@ -15,8 +15,20 @@ import numpy as np
 from scipy import stats
 import pandas as pd
 
+
+__author__ = 'Jose Luis Lopez Elvira'
+__version__ = 'v.1.0.0'
+__date__ = '15/05/2021'
+
+"""
+Modificaciones:
+    15/05/2021, v1.0.0
+        - Eliminado error por solid_capstyle='round' en la instrucción de crear las barras.
+"""
+
+
 # =============================================================================
-# #para quitar el cero inicial
+# Funciones de ayuda, para quitar el cero inicial
 # =============================================================================
 def _remove_leading_zero(value, string):
     if 1 > value > -1:
@@ -259,13 +271,13 @@ def _plot(ESCL, varlabels, decES, borders, numbers, grid, axx):
         
         #barra solo para los no significativos        
         plotline, caps, barlinecols = ax.errorbar(ESCL[np.logical_not(out),0], ind[np.logical_not(out)], xerr= [ESCL[np.logical_not(out),0]-ESCL[np.logical_not(out), 1], ESCL[np.logical_not(out), 2]-ESCL[np.logical_not(out),0]],
-            fmt='o', ms=5, color='0.6', elinewidth=1.5, capsize=3, capthick=2, solid_capstyle='round', zorder=2)
+            fmt='o', ms=5, color='0.6', elinewidth=1.5, capsize=3, capthick=2, zorder=2)
         for cap in caps: #como no funciona el solid_capstyle='round', hace los caps redondeados uno a uno
             cap._marker._capstyle = 'round'
         
         #barra solo para los significativos
         plotline, caps, barlinecols = ax.errorbar(ESCL[out,0], ind[out], xerr= [ESCL[out,0]-ESCL[out, 1], ESCL[out, 2]-ESCL[out,0]],
-            fmt='o', ms=6, color='0', elinewidth=1.5, capsize=3, capthick=2, solid_capstyle='round', zorder=2)
+            fmt='o', ms=6, color='0', elinewidth=1.5, capsize=3, capthick=2, zorder=2)
         for cap in caps:
             cap._marker._capstyle = 'round'
         #ax.set_xlim(-2, 2)
@@ -313,7 +325,9 @@ def _plot(ESCL, varlabels, decES, borders, numbers, grid, axx):
         if axx is None:
             plt.show()
 
-#%%        
+# =============================================================================
+# %% Pruebas
+# =============================================================================
 if __name__ == '__main__':
     
     help(Hedges_g)
@@ -451,8 +465,6 @@ if __name__ == '__main__':
     ESCI, tabla=Hedges_g(dfx, dfy, grouplabels=['G1', 'G2'], varlabels=dfx.columns, muestras_dep=False, pctcl = 95, sdpooled= True, tipose='Nakagawa', decVariable=3, decP=3, decES=3, numbers=True, show=True, ax=ax)
     ax.set_xlim(-2,2)
     plt.show()
-    
-    #%%
     
     
     
