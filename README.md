@@ -24,3 +24,6 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sujerencias
 
 ## Licencia
 El código presentado se encuentra bajo [licencia MIT](https://opensource.org/licenses/mit-license.php)
+
+<a rel="license" href="http://creativecommons.org/licenses/by/4.0/"><img alt="Licencia de Creative Commons" style="border-width:0" src="https://i.creativecommons.org/l/by/4.0/88x31.png" /></a><br />Este obra está bajo una <a rel="license" href="http://creativecommons.org/licenses/by/4.0/">licencia de Creative Commons Reconocimiento 4.0 Internacional</a>.
+
