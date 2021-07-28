@@ -30,6 +30,8 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 [Tipos de gráficas sofisticadas específicas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/GraficasSofisticadasEspecificas.ipynb)
 
 ## Tratamiento de datos
+[Características de las ondas sinusoidales](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Caracteristicas_de_ondas_sinusoidales.ipynb)
+
 [Cómo transformar la orientación de las bases de datos](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Transformar_Bases_de_Datos.ipynb)
 
 [Análisis del perfil de fuerza en salto vertical](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Analisis_salto_vertical_Fuerzas.ipynb)
