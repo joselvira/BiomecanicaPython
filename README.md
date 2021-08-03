@@ -43,7 +43,7 @@ Análisis de registros obtenidos en test con dinamómetros isocinéticos. En pro
 
 
 ## Análisis cinemático del movimiento
-[Relación entre posición, velocidad y aceleración](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Relacion_Desplazamiento_Velocidad_Aceleracion.ipynb)
+[Relación entre posición, velocidad y aceleración](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Relacion_Posicion_Velocidad_Aceleracion.ipynb)
 
 [Uso de Blender como herramienta (gratuita) de digitalización](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Digitalizar_con_Blender_y_Python.ipynb)
 
