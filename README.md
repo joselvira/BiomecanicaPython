@@ -57,4 +57,4 @@ Análisis de registros obtenidos en test con dinamómetros isocinéticos. En pro
 Jose Luis López Elvira (jose.lopeze@umh.es)
 
 ### Última actualización
-15/05/2021
+03/07/2021
