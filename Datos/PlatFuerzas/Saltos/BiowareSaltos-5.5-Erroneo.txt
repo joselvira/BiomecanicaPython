@@ -1,0 +1,3 @@
+BioWare Version 5.2.1.3 Export
+Device:	Kistler Grande2 9287CA	Kistler Grande2 9287CA	Kistler Grande2 9287CA
+Samples (#):	8000	8000	8000
