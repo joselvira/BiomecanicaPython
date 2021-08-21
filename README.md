@@ -29,6 +29,8 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 
 [Tipos de gráficas sofisticadas específicas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/GraficasSofisticadasEspecificas.ipynb)
 
+[Búsqueda masiva de errores en archivos de datos de una o varias carpetas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Busqueda_errores_graficar_carpeta.ipynb)
+
 ## Tratamiento de datos
 [Características de las ondas sinusoidales](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Caracteristicas_de_ondas_sinusoidales.ipynb)
 
