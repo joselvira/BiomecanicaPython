@@ -22,7 +22,7 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 
 [Repetición de tareas. Los bucles](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/RepeticionTareas_Bucles.ipynb)
 
-[Manejo de archivos y carpetas para cargar y guardar datos](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/ManejoArchivosCarpetas.ipynb)
+[Lectura y escritura de archivos y carpetas para cargar y guardar datos](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Lectura_escritura_archivos_carpetas.ipynb)
 
 ## Representación gráfica de datos
 [Cómo configurar gráficas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Como_configurar_graficas.ipynb)
