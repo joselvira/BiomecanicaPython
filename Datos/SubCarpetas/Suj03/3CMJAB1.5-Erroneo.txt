@@ -1,0 +1,9 @@
+BioWare 3.0 Export
+Device:	Integrated Amp Plate 1 9281CA	Integrated Amp Plate 1 9281CA	Integrated Amp Plate 1 9281CA
+Samples (#):	8000	8000	8000
+Rate (Hz):	1000.000000	1000.000000	1000.000000
+Contact period start (sample #):	0	0	0
+Contact period end (sample #):	7999	7999	7999
+Contact period start time (s):	0.000000	0.000000	0.000000
+Contact period end time (s):	7.999000	7.999000	7.999000
+
