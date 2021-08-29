@@ -36,6 +36,8 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 
 [Cómo transformar la orientación de las bases de datos](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Transformar_Bases_de_Datos.ipynb)
 
+[Cómo cortar variables cíclicas en sus repeticiones](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Como_cortar_variables_ciclicas_en_sus_repeticiones.ipynb)
+
 [Análisis del perfil de fuerza en salto vertical](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Analisis_salto_vertical_Fuerzas.ipynb)
 
 Preparación de datos para normalizar en el tiempo series de datos. En proceso.
