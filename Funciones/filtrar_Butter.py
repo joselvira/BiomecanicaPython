@@ -21,7 +21,7 @@ __date__ = '08/05/2021'
 """
 Modificaciones:
     08/05/2021, v1.5.0
-        - Arraglado con xarray. Si tiene nan los rellena interpolando y después los elimina
+        - Arreglado con xarray. Si tiene nan los rellena interpolando y después los elimina
         - Si no se pide el RMS o hacer la gráfica, no lo calcula.
         - Cambiados nombres de argumentos a más pythonics.
 """

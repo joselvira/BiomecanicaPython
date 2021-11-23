@@ -89,14 +89,15 @@ def corta_repes(dfData, frec=None, col_tiempo='time', col_factores=[], col_refer
         
     Examples
     --------
-    >>> import numpy as np
-    >>> from filtrar_Butter import filtrar_Butter
-    >>> y = np.cumsum(np.random.randn(1000))
-    >>> fy = filtrar_Butter(y, fr=1000, fc=10, order=2, show=True)
-    >>>
-    >>> dfCaminos = pd.DataFrame((np.random.random([100, 4])-0.5).cumsum(axis=0), columns=['A','B','C','D'])
-    >>> dfCaminosFilt, RMS = filtrar_Butter(dfCaminos, 1000, 50, 2, show=True, returnRMS=True)
+    >>> df_cortes = corta_repes(dfTodosArchivos, func_cortes=detect_peaks,  
+                    col_factores=['partID', 'tiempo'], col_referencia='value', 
+                    col_variables=['value'], descarta_rep_ini=11, num_repes=4, 
+                    descarta_rep_fin=2, **dict(mpd=100, show=False))
     
+    >>> df_cortes = corta_repes(dfTodosArchivos, func_cortes=detect_peaks,  
+                    col_factores=['partID', 'tiempo'], col_referencia='value',
+                    col_variables=['value'], descarta_rep_ini=10, 
+                    descarta_rep_fin=2, **dict(mpd=100, show=False))
     """
         
         
@@ -117,6 +118,7 @@ def corta_repes(dfData, frec=None, col_tiempo='time', col_factores=[], col_refer
         frec = 1/dfData.iloc[1, dfData.columns.get_loc(col_tiempo)]
         
     var_bloque=[] #lista vacía donde irá guardando cada ensayo completo
+    #----PROBAR PASARLO A FORMATO TIDY Y CORTAR DE UNA VEZ
     for n, gb in dfData.groupby(col_factores):
       #print(n)
       
@@ -166,7 +168,7 @@ el primer dato de cada par (cuando supera el umbral). Si se quiere que se quede
 con el de bajada, cambiar por cortes = cortes[:,1]
 """
 def detect_onset_aux(dfData, **args_func_cortes):
-    #Si se pasa como argumento corte_ini=1, coge el carte del final de cada ventana
+    #Si se pasa como argumento corte_ini=1, coge el corte del final de cada ventana
     try:
         from detecta import detect_onset
     except:		

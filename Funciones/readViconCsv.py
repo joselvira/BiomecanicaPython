@@ -143,7 +143,7 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
     
     
     
-    #Con pandas directamente funciona (para evitar error si primera línea no son datos, lee la fina de las unidades y luego la quita)
+    #Con pandas directamente funciona (para evitar error si primera línea no son datos, lee la fila de las unidades y luego la quita)
     dfReturn = pd.read_csv(nombreArchivo, delimiter=separador, header=None, skiprows=inicioBloque+4, skipfooter=finArchivo-finBloque-5, usecols=range(len(nomVars)), engine='python')
     dfReturn = dfReturn.drop(index=0).reset_index(drop=True).astype(float) #borra la primera fila, que contiene las unidades
     
@@ -151,7 +151,7 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
     
     var=['_'.join(s.split('_')[:-1]) for s in nomVars[:len(nomVars)]] #gestiona si la variable tiene separador '_', lo mantiene
     coord=[s.split(':')[-1] for s in nomCols[:len(nomVars)]]
-    dfReturn.columns=pd.MultiIndex.from_tuples(list(zip(*[var,coord])), names=['Variable', 'Coord'])
+    dfReturn.columns=pd.MultiIndex.from_tuples(list(zip(*[var,coord])), names=['nom_var', 'eje'])
     #dfReturn.columns=[var, coord]
     #dfReturn.columns.set_names(names=['Variable', 'Coord'], level=[0,1], inplace=True)
 
@@ -164,8 +164,9 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
     
     #Si hace falta lo pasa a xArray
     if formatoxArray:
-        daReturn=xr.DataArray()
-    
+        if header_format!='flat':
+            dfReturn.columns = dfReturn.columns.map('_'.join).str.strip()
+        
         #transforma los datos en xarray
         x=dfReturn.filter(regex='|'.join(['_x','_X'])).to_numpy().T
         y=dfReturn.filter(regex='|'.join(['_y','_Y'])).to_numpy().T
@@ -176,22 +177,24 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
         canales = dfReturn.filter(regex='|'.join(['_x','_X'])).columns.str.rstrip('|'.join(['_x','_X']))
                
         n_frames = x.shape[1]
-        channels = canales
+        nom_vars = canales
         time = np.arange(start=0, stop=n_frames / frecuencia, step=1 / frecuencia)
         coords = {}
         coords['axis'] = ['x', 'y', 'z']
-        coords['channel'] = channels
+        coords['var'] = nom_vars
         coords['time'] = time
         
         daReturn=xr.DataArray(
                     data=data,
-                    dims=('axis', 'channel', 'time'),
+                    dims=('axis', 'var', 'time'),
                     coords=coords,
                     name=nomBloque,
                     attrs={'Frec':frecuencia}
                     #**kwargs,
                 )
-        
+        if header_format!='flat': #si hace falta lo vuelve a poner como multiindex
+            dfReturn.columns=pd.MultiIndex.from_tuples(list(zip(*[var,coord])), names=['nom_var', 'eje'])
+    
             
     
     if formatoxArray and returnFrec:
@@ -248,12 +251,17 @@ if __name__ == '__main__':
     nombreArchivo = Path(ruta_Archivo)    
     dfDatos, daDatos = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', formatoxArray=True)
     dfDatos['Right_Toe_Z'].plot()
-    daDatos.sel(channel='Right_Toe', axis='z').plot.line()
+    daDatos.sel(var='Right_Toe', axis='z').plot.line()
     
     
     dfDatos, daDatos = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', formatoxArray=True)
     dfDatos['AngArtLKnee_x'].plot()
-    daDatos.sel(channel='AngArtLKnee', axis='x').plot.line()
+    daDatos.sel(var='AngArtLKnee', axis='x').plot.line()
+
+    dfDatos, daDatos = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', formatoxArray=True, header_format='multi')
+    dfDatos['AngArtLKnee'].plot()
+    daDatos.sel(var='AngArtLKnee').plot.line(x='time')
+    
     
     
     #Archivo con huecos
@@ -261,6 +269,14 @@ if __name__ == '__main__':
     nombreArchivo = Path(ruta_Archivo)
     dfDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', returnFrec=True)
     dfDatos.plot()
+    
+    dfDatos, daDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', formatoxArray=True, returnFrec=True)
+    dfDatos.plot()
+    daDatos.sel(axis='x').plot.line(x='time', hue='var')
+    
+    dfDatos, daDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', formatoxArray=True, returnFrec=True, header_format='multi')
+    dfDatos.plot()
+    daDatos.sel(axis='x').plot.line(x='time', hue='var')
     
     #prueba con encabezado multiindex
     ruta_Archivo = r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconSinHuecos_01_Carrillo_FIN.csv'
