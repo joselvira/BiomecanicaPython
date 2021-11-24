@@ -8,11 +8,14 @@ import numpy as np
 import pandas as pd
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.1.1.1'
-__date__ = '08/11/2021'
+__version__ = 'v.1.2.0'
+__date__ = '24/11/2021'
 
 """
 Modificaciones:
+    24/11/2021, v1.2.0
+        - Incluida opción de que incluya al final de cada repetición el primer dato de la siguiente. De esta forma tienen más continuidad.
+
     08/11/2021, v1.1.1
         - A la función auxiliar detect_onset_aux se le puede pasar como argumento corte_ini=1 para que coja el final de la ventana encontrada. Por defecto coge el inicio.
         - Además a la misma función cuando se pide que corte con el final de la ventana, le suma 1 para que coja cuando ha superado el umbral.
@@ -31,7 +34,7 @@ Modificaciones:
 # %% Función cortar directamente CON PANDAS
 # =============================================================================
 #from detecta import detect_peaks
-def corta_repes(dfData, frec=None, col_tiempo='time', col_factores=[], col_referencia='value', col_variables=[], descarta_rep_ini=0, num_repes=None, descarta_rep_fin=0, func_cortes=None, **args_func_cortes):
+def corta_repes(dfData, frec=None, col_tiempo='time', col_factores=[], col_referencia='value', col_variables=[], descarta_rep_ini=0, num_repes=None, descarta_rep_fin=0, incluye_primero_siguiente=True, func_cortes=None, **args_func_cortes):
     """
     Function for making cuts in continuous cyclic signals
            
@@ -55,7 +58,7 @@ def corta_repes(dfData, frec=None, col_tiempo='time', col_factores=[], col_refer
         Nombre de la columna que contiene la variable a utilizar de referencia 
         para los cortes
         
-    col_variables : streng o list
+    col_variables : string o list
         Nombres de las columnas que contienen las variables a cortar. Puede ser
         una única columna o una lista con los combres de varias.
         
@@ -68,6 +71,10 @@ def corta_repes(dfData, frec=None, col_tiempo='time', col_factores=[], col_refer
         
     num_repes: int
         Número de repeticiones a considerar desde las descartadas al inicio.
+    
+    incluye_primero_siguiente: bool
+        Indica si se incluye el primer dato de la siguiente repetición como 
+        último de la anterior (se duplican)
     
     func_cortes : nombre de función
         Nombre de la función a emplear para hacer los cortes. La función debe 
@@ -140,12 +147,12 @@ def corta_repes(dfData, frec=None, col_tiempo='time', col_factores=[], col_refer
       var_cortes = [] #lista vacía donde iremos incluyendo cada repetición
       for n_corte in range(len(cortes)-1):
           #print(cortes[n_corte], cortes[n_corte+1])
-          var_cortes.append(gb.iloc[cortes[n_corte]:cortes[n_corte+1], :].assign(**{'repe':n_corte, 'time_repe':np.arange(0, (cortes[n_corte+1]-cortes[n_corte])/frec, 1/frec)[:(cortes[n_corte+1]-cortes[n_corte])]})) #coge el trozo de la variable desde un corte hasta el siguiente
+          var_cortes.append(gb.iloc[cortes[n_corte]:cortes[n_corte+1]+incluye_primero_siguiente, :].assign(**{'repe':n_corte, 'time_repe':np.arange(0, (cortes[n_corte+1]+incluye_primero_siguiente-cortes[n_corte])/frec, 1/frec)[:(cortes[n_corte+1]+incluye_primero_siguiente-cortes[n_corte])]})) #coge el trozo de la variable desde un corte hasta el siguiente
         
       if var_cortes!=[]:
           var_bloque.append(pd.concat(var_cortes))
       
-    dfVar_cortes=pd.concat(var_bloque)
+    dfVar_cortes = pd.concat(var_bloque).reset_index(drop=True) #puede ser útil tener el índice original?
     
     #Reordena las columnas
     if [col_referencia] != col_variables:
@@ -279,6 +286,11 @@ if __name__ == '__main__':
     
     #Prueba la función
     df_cortes = corta_repes(dfTodosArchivos, func_cortes=detect_peaks,  col_factores=['partID', 'tiempo'], col_referencia='value', col_variables=['value'])#, **dict(mpd=100, show=False))
+    df_cortes
+    sns.relplot(data=df_cortes, x='time_repe', y='value',  col='partID', row='tiempo', units='repe', estimator=None, hue='repe',  kind='line')
+
+    #Prueba la función sin incluir el primer dato del siguiente como último del anterior
+    df_cortes = corta_repes(dfTodosArchivos, incluye_primero_siguiente=False, func_cortes=detect_peaks,  col_factores=['partID', 'tiempo'], col_referencia='value', col_variables=['value'])#, **dict(mpd=100, show=False))
     df_cortes
     sns.relplot(data=df_cortes, x='time_repe', y='value',  col='partID', row='tiempo', units='repe', estimator=None, hue='repe',  kind='line')
 
