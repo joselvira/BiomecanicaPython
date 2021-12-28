@@ -40,9 +40,11 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 
 [Análisis del perfil de fuerza en salto vertical](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Analisis_salto_vertical_Fuerzas.ipynb)
 
-Preparación de datos para normalizar en el tiempo series de datos. En proceso.
+Cómo sincronizar señales con un desfase temporal. (En proceso)
 
-Análisis de registros obtenidos en test con dinamómetros isocinéticos. En proceso.
+Preparación de datos para normalizar en el tiempo series de datos. (En proceso).
+
+Análisis de registros obtenidos en test con dinamómetros isocinéticos. (En proceso).
 
 
 
