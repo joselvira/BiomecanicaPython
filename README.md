@@ -40,7 +40,7 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 
 [Análisis del perfil de fuerza en salto vertical](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Analisis_salto_vertical_Fuerzas.ipynb)
 
-Cómo sincronizar señales con un desfase temporal. (En proceso)
+[Cómo sincronizar señales con un desfase temporal](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Como_sincronizar_se%C3%B1ales_desfasadas.ipynb)
 
 Preparación de datos para normalizar en el tiempo series de datos. (En proceso).
 
