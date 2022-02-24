@@ -14,12 +14,15 @@ import scipy.signal
 
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.1.5.0'
-__date__ = '08/05/2021'
+__version__ = 'v.1.5.1'
+__date__ = '24/02/2022'
 
 
 """
 Modificaciones:
+    24/02/2022, v1.5.1
+        - Cambiado el color del gráfico del original para que no se confundan
+        
     08/05/2021, v1.5.0
         - Arreglado con xarray. Si tiene nan los rellena interpolando y después los elimina
         - Si no se pide el RMS o hacer la gráfica, no lo calcula.
@@ -75,7 +78,7 @@ def filtrar_Butter(dat_orig, fr, fc, order=2.0, kind='low', returnRMS=False, sho
     passes = 2.0 #nº de pasadas del filtro adelante y atrás
     
     #fc = 15
-    Cf = (2**(1/passes)-1)**(1/(2*order)) #correction factor. Para 2nd order = 0.802 
+    Cf = (2**(1/passes)-1)**(1/(2*order)) #correction factor. Para 2nd order = 0.802 (Winter, 2009, p69)
     Wn = 2*fc/fr/Cf
            
     b, a = scipy.signal.butter(order, Wn, btype = kind)
@@ -151,9 +154,9 @@ def _plot(dat_orig, DatFilt, RMS, fc, ax):
         labels=[dat_orig.columns[x]+', RMSE='+'{:.3f}'.format(RMS.iloc[0,x]) for x in range(dat_orig.shape[1])]            
         plt.legend(labels)
 
-    else: #cuando no son dataframe, incluso si son pandas series
-        ax.plot(dat_orig, 'b:', label='Original')            
+    else: #cuando no son dataframe, incluso si son pandas series                    
         ax.plot(DatFilt, 'b-', label='Filt (RMSE={:.3f})'.format(RMS))
+        ax.plot(dat_orig, 'r:', alpha=0.8, label='Original')
         plt.legend(loc='best')
         
     ax.set_xlabel('Num. datos')
