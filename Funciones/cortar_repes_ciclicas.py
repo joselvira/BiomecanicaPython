@@ -8,11 +8,14 @@ import numpy as np
 import pandas as pd
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.1.2.0'
-__date__ = '24/11/2021'
+__version__ = 'v.2.0.0'
+__date__ = '11/12/2021'
 
 """
 Modificaciones:
+    11/12/2021, v2.0.0
+        - Incluida una versión con xarray, mucho más rápida.
+
     24/11/2021, v1.2.0
         - Incluida opción de que incluya al final de cada repetición el primer dato de la siguiente. De esta forma tienen más continuidad.
 
@@ -36,27 +39,28 @@ Modificaciones:
 #from detecta import detect_peaks
 def corta_repes(dfData, frec=None, col_tiempo='time', col_factores=[], col_referencia='value', col_variables=[], descarta_rep_ini=0, num_repes=None, descarta_rep_fin=0, incluye_primero_siguiente=True, func_cortes=None, **args_func_cortes):
     """
-    Function for making cuts in continuous cyclic signals
+    Función para hacer cortes en señales cíclicas
            
     Parameters
     ----------
     dfData : Pandas dataframe
         Contiene los datos continuos
         Puede estar en formato 'long' o 'tidy'
-        Puede contener distinto número de factores
+        Puede contener distinto número de factores.
         
     frec : float
-        frecuencia de muestreo de la señal.
+        frecuencia de muestreo de la señal. Si no se indica la calcula a partir
+        del primer dato de la columna tiempo.
         
     col_tiempo : string
-        Nombre de la columna que contiene la variable temporal
+        Nombre de la columna que contiene la variable temporal.
         
     col_factores : list
-        Listado de nombres de las columnas que contienen los factores
+        Listado de nombres de las columnas que contienen los factores.
         
     col_referencia : string
         Nombre de la columna que contiene la variable a utilizar de referencia 
-        para los cortes
+        para los cortes.
         
     col_variables : string o list
         Nombres de las columnas que contienen las variables a cortar. Puede ser
@@ -67,29 +71,29 @@ def corta_repes(dfData, frec=None, col_tiempo='time', col_factores=[], col_refer
         
     descarta_rep_fin: int
         Número de repeticiones que descarta desde el final.
-        No funciona si se especifica num_repes.
+        No se tiene en cuenta si se especifica num_repes..
         
     num_repes: int
         Número de repeticiones a considerar desde las descartadas al inicio.
     
     incluye_primero_siguiente: bool
         Indica si se incluye el primer dato de la siguiente repetición como 
-        último de la anterior (se duplican)
+        último de la anterior (se duplican). Útil para representar gráficamente.
     
     func_cortes : nombre de función
         Nombre de la función a emplear para hacer los cortes. La función debe 
         admitir un array 1D y devolver una lista también 1D con los índices de 
-        los cortes
+        los cortes.
         
     args_func_cortes : dictionary
         Diccionario con los argumentos a pasar a la función que realiza los 
-        cortes
+        cortes.
         
     
     Returns
     -------
     dfVar_cortes : Pandas dataframe
-        dataframe con los datos originales con dos columnsa añadidas:
+        dataframe con los datos originales con dos columnas añadidas:
             repe : contiene el número de la repetición
             time_repe : contiene el tiempo local de cada repetición
             
@@ -206,11 +210,154 @@ Necesaria para pasarla como argumento a la función corta_repes. Se queda con
 el primer listado de la función detect_peaks. Lo segundo que pasa son las 
 características de los cortes.
 """
-def find_peaks_adaptado(dfData, **args_func_cortes):
+def find_peaks_aux(data, **args_func_cortes):
     from scipy.signal import find_peaks
-    cortes = find_peaks(dfData, **args_func_cortes)
-    cortes = cortes[0] #se queda con el primer dato de cada par de datos.
-    return cortes
+    data=data.copy() #esto para solucionar problema cuando se llama desde xr.apply_ufunc
+    cortes, _ = find_peaks(data, **args_func_cortes)
+    return cortes #se queda con el primer dato de cada par de datos.
+
+
+
+# =============================================================================
+# %% con xarray, igual pero mucho más rápido
+# =============================================================================
+def corta_simple_aux_xr(data, data_var_referencia=None, func_cortes=None, max_repes=40, descarta_rep_ini=0, num_repes=None, descarta_rep_fin=0, incluye_primero_siguiente=True, **args_func_cortes):
+    """
+    Función intermedia para poder utilizar la función cortar_repes_ciclicas_xr        
+    """
+        
+    import itertools
+    cortes = func_cortes(data_var_referencia.data, **args_func_cortes)
+    
+    #Ajusta el corte inicial y final si hace falta
+    cortes = cortes[descarta_rep_ini:]
+    if num_repes==None:
+        cortes = cortes[:len(cortes)-descarta_rep_fin]
+    else: #si se pide un nº determinado de repeticiones desde la inicial
+        if len(cortes) > num_repes:
+            cortes = cortes[:num_repes+1]
+        else:
+            print('No hay suficiente número de repeticiones en el bloque {0}, se trunca hasta el final'.format(n))  
+    
+    x1 = np.full((max_repes, len(data)),np.nan)
+    if len(cortes) > 0: #Si no ha encontrado cortes, devolverá el array vacío
+        x2 = np.split(data, cortes)[1:-1]
+        x2 = np.array(list(itertools.zip_longest(*x2, fillvalue=np.nan))).T
+        
+        x1[:x2.shape[0], : x2.shape[1]] = x2
+        
+        #Para que incluya como último dato de cada repe el primero de la siguiente
+        #Se puede mejorar vectorizando
+        if incluye_primero_siguiente:      
+          for r in range(len(cortes)-1):
+              x1[r, cortes[r+1]-cortes[r]] = data[cortes[r+1]]
+    return x1
+
+
+# data_var_referencia = daTodos.isel(Archivo=0).sel(nom_var='AngBiela', lado='L', eje='x')
+# data = daData.isel(Archivo=0).sel(nom_var='AngArtKnee', lado='L', eje='x')
+def corta_repes_xr(daData, frec=None, var_referencia=None, descarta_rep_ini=0, num_repes=None, descarta_rep_fin=0, incluye_primero_siguiente=True, func_cortes=None, max_repes=40, **args_func_cortes):
+    """
+    Función para hacer cortes en señales cíclicas
+           
+    Parameters
+    ----------
+    daData : xarray DataArray
+        Puede contener distinto número de factores en las dimensiones
+        
+    frec : float
+        Frecuencia de muestreo de la señal. Si no se indica, intenta tomarla
+        de los atributos de propio DataArray, y si no la tiene la calcula a 
+        partir del primer dato de la dimensión tiempo.
+    
+    var_referencia : string
+        Nombre de la columna que contiene la variable a utilizar de referencia 
+        para los cortes.
+        
+    descarta_rep_ini: int
+        Número de repeticiones que descarta desde el inicio.
+        
+    descarta_rep_fin: int
+        Número de repeticiones que descarta desde el final.
+        No se tiene en cuenta si se especifica num_repes.
+        
+    num_repes: int
+        Número de repeticiones a considerar desde las descartadas al inicio.
+    
+    incluye_primero_siguiente: bool
+        Indica si se incluye el primer dato de la siguiente repetición como 
+        último de la anterior (se duplican). Útil para representar gráficamente.
+    
+    func_cortes : nombre de función
+        Nombre de la función a emplear para hacer los cortes. La función debe 
+        admitir un array 1D y devolver una lista también 1D con los índices de 
+        los cortes.
+        
+    max_repes : int
+        Máximo número de repeticiones esperables. Actualmente no es capaz de 
+        ajustarse automáticamente.
+        
+    args_func_cortes : dictionary
+        Diccionario con los argumentos a pasar a la función que realiza los 
+        cortes.
+        
+    
+    Returns
+    -------
+    daCortes : xarray DataArray
+        DataArray con los datos originales con dos dimensiones añadidas:
+            repe : contiene el número de la repetición
+            time : contiene el tiempo local de cada repetición
+            
+        
+    Examples
+    --------
+    >>> daCortado = cortar_repes_ciclicas_xr(daTodos, func_cortes=detect_peaks,
+                                var_referencia='a', descarta_rep_ini=0,
+                                num_repes=None, descarta_rep_fin=0,
+                                incluye_primero_siguiente=True)
+    
+    >>> daCortado = cortar_repes_ciclicas_xr(daTodos, func_cortes=detect_onset_aux,
+                                var_referencia='a', incluye_primero_siguiente=True,
+                                **dict(threshold=60))
+    """
+    import xarray as xr 
+    
+    
+    if func_cortes==None:
+        raise Exception('Debes especificar una función para buscar cortes')
+        
+    if frec==None:
+        try:
+            frec = daData.attrs['frec'] #si tiene la frecuencia en los atributos, la coge
+        except:
+            frec = 1/daData.time[1].values #si no está en atributos, la calcula a partir de la dimensión time
+            
+    da = xr.apply_ufunc(corta_simple_aux_xr,  #nombre de la función
+                      daData,  #después los argumentos de la función en el mismo ortden
+                      daData.sel(nom_var=var_referencia),
+                      func_cortes,
+                      max_repes,
+                      descarta_rep_ini,
+                      num_repes,
+                      descarta_rep_fin,
+                      incluye_primero_siguiente,
+                      input_core_dims=[['time'], ['time'], [], [], [], [], [], []],  #lista con una entrada por cada argumento
+                      output_core_dims=[['repe', 'time']],  #datos que devuelve
+                      exclude_dims=set(('repe', 'time' )),  #dimensiones que se permite que cambien (tiene que ser un set)
+                      dataset_fill_value=np.nan,
+                      vectorize=True,
+                      dask='parallelized',
+                      keep_attrs=True,
+                      kwargs=args_func_cortes,
+                      )
+    da = da.assign_coords(repe=range(len(da.repe)))
+    da = da.assign_coords(time=np.arange(0, len(da.time)/frec, 1/frec))
+    da = da.dropna(dim='repe', how='all').dropna(dim='time', how='all')    
+    return da
+    
+  
+# =============================================================================
 
 
 
@@ -243,8 +390,7 @@ if __name__ == '__main__':
     
     def crea_muestra_continua(num_suj=10, Fs=100.0, IDini=0, rango_offset = [-2.0, -0.5], rango_amp = [1.0, 2.2], rango_frec = [1.8, 2.4], rango_af=[0.0, 1.0], rango_duracion=[5.0, 5.1], amplific_ruido=[0.4, 0.7], fc_ruido=[7.0, 12.0]):
         sujeto=[]
-        for suj in range(num_suj):
-            
+        for suj in range(num_suj):            
             a = np.random.uniform(rango_amp[0], rango_amp[1])
             of = np.random.uniform(rango_offset[0], rango_offset[1])
             f =  np.random.uniform(rango_frec[0], rango_frec[1])
@@ -275,16 +421,21 @@ if __name__ == '__main__':
     n=5
     duracion=10
     frec=200.0
-    Pre = crea_muestra_continua(n, Fs=frec, IDini=0, rango_offset = [25, 29], rango_amp = [40, 45], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'pre'})
-    Post = crea_muestra_continua(n, Fs=frec, IDini=0, rango_offset = [22, 26], rango_amp = [36, 40], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'post'})
-    dfTodosArchivos = pd.concat([Pre, Post]).reset_index()
-    dfTodosArchivos = dfTodosArchivos[['partID', 'tiempo', 'time', 'value']] #Reordena los factores
+    Pre_v1 = crea_muestra_continua(n, Fs=frec, IDini=0, rango_offset = [25, 29], rango_amp = [40, 45], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'pre', 'nom_var':'a'})
+    Post_v1 = crea_muestra_continua(n, Fs=frec, IDini=0, rango_offset = [22, 26], rango_amp = [36, 40], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'post', 'nom_var':'a'})
+    Pre_v2 = crea_muestra_continua(n, Fs=frec, IDini=0, rango_offset = [35, 39], rango_amp = [50, 55], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'pre', 'nom_var':'b'})
+    Post_v2 = crea_muestra_continua(n, Fs=frec, IDini=0, rango_offset = [32, 36], rango_amp = [32, 45], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'post', 'nom_var':'b'})
+    Pre_v3 = crea_muestra_continua(n, Fs=frec, IDini=0, rango_offset = [35, 39], rango_amp = [10, 15], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'pre', 'nom_var':'c'})
+    Post_v3 = crea_muestra_continua(n, Fs=frec, IDini=0, rango_offset = [32, 36], rango_amp = [12, 16], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'post', 'nom_var':'c'})
     
-    sns.relplot(data=dfTodosArchivos, x='time', y='value',  col='tiempo', units='partID', estimator=None, hue='partID',  kind='line')
+    dfTodosArchivos = pd.concat([Pre_v1, Post_v1, Pre_v2, Post_v2, Pre_v3, Post_v3]).reset_index()
+    dfTodosArchivos = dfTodosArchivos[['partID', 'tiempo', 'nom_var', 'time', 'value']] #Reordena los factores
+
+    sns.relplot(data=dfTodosArchivos, x='time', y='value',  col='tiempo', row='nom_var', units='partID', estimator=None, hue='partID',  kind='line')
     
     
-    
-    #Prueba la función
+    #########################
+    #Prueba la función Pandas
     df_cortes = corta_repes(dfTodosArchivos, func_cortes=detect_peaks,  col_factores=['partID', 'tiempo'], col_referencia='value', col_variables=['value'])#, **dict(mpd=100, show=False))
     df_cortes
     sns.relplot(data=df_cortes, x='time_repe', y='value',  col='partID', row='tiempo', units='repe', estimator=None, hue='repe',  kind='line')
@@ -309,3 +460,32 @@ if __name__ == '__main__':
     df_cortes = corta_repes(dfTodosArchivos, func_cortes=detect_onset_aux, col_factores=['partID', 'tiempo'], col_referencia='value', col_variables=['value'], **dict(threshold=80, corte_ini=1, show=True))
     df_cortes
     sns.relplot(data=df_cortes, x='time_repe', y='value',  col='partID', row='tiempo', units='repe', estimator=None, hue='repe',  kind='line')
+
+    #########################
+    #prueba la función xarray
+    daTodos = dfTodosArchivos.set_index(['partID', 'tiempo', 'nom_var', 'time']).to_xarray().to_array()
+    daTodos = daTodos.squeeze('variable') #la quita de dimensiones
+    del daTodos['variable'] #la quita de coordenadas
+    daTodos.attrs['frec'] = 1/daTodos.time[1].values #incluimos la frecuencia como atributo
+    daTodos.attrs['units'] = 'grados'
+    daTodos.time.attrs['units'] = 'segundos'
+    daTodos
+    
+    #Prueba la función
+    daCortado = corta_repes_xr(daTodos, func_cortes=detect_peaks, var_referencia='a', descarta_rep_ini=0, num_repes=None, descarta_rep_fin=0, incluye_primero_siguiente=True)
+    daCortado
+    daCortado.sel(nom_var='b').plot.line(x='time', col='tiempo', hue='repe', row='partID')
+    
+    #Prueba la función
+    daCortado = corta_repes_xr(daTodos, func_cortes=detect_onset_aux, var_referencia='a', descarta_rep_ini=0, num_repes=None, descarta_rep_fin=0, incluye_primero_siguiente=True, **dict(threshold=60))
+    daCortado
+    daCortado.sel(nom_var='a').plot.line(x='time', col='tiempo', hue='repe', row='partID')
+    
+    
+    import time
+    tiempoProceso = time.time()
+    for i in range(10):
+        daCortado = corta_repes_xr(daTodos, func_cortes=detect_peaks, var_referencia='a', descarta_rep_ini=0, num_repes=None, descarta_rep_fin=0, incluye_primero_siguiente=True)
+    print('Tiempo {0:.3f} s \n'.format(time.time()-tiempoProceso))
+    daCortado.sel(nom_var='rodilla').plot.line(x='time', col='tiempo', hue='repe', row='partID')
+    
