@@ -20,7 +20,7 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 
 [Tipos de variables en Python](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Tipos_de_variables_en_Python.ipynb)
 
-[Toma de decisiones. Los_condicionales](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/TomaDeDecisiones_Condicionales.ipynb)
+[Toma de decisiones. Los condicionales](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/TomaDeDecisiones_Condicionales.ipynb)
 
 [Repetición de tareas. Los bucles](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/RepeticionTareas_Bucles.ipynb)
 
