@@ -220,6 +220,11 @@ def filtrar_Butter_bandpass(dat_orig, fr, fclow, fchigh, order=2.0, show=False, 
         
     elif isinstance(dat_orig, pd.Series):
         DatFilt = pd.Series(scipy.signal.lfilter(b, a, dat_orig), index=dat_orig.index, name=dat_orig.name)
+    
+    elif isinstance(dat_orig, xr.DataArray):
+        #DatFilt = xr.apply_ufunc(scipy.signal.filtfilt, b, a, dat_orig.dropna(dim='time')) #se asume que hay una dimensión tiempo
+        DatFilt = xr.apply_ufunc(scipy.signal.filtfilt, b, a, dat_orig.interpolate_na(dim='time', method='linear', fill_value='extrapolate')) #rellena los nan con datos interpolados
+        DatFilt = DatFilt.where(xr.where(np.isnan(dat_orig), False, True), np.nan) #recupera el nº de datos original rellenando con nan los finales como el original
         
     else: #si los datos no son pandas dataframe
         DatFilt = scipy.signal.lfilter(b, a, dat_orig)
