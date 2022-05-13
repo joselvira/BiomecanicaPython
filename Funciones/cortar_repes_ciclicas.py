@@ -257,9 +257,8 @@ def corta_simple_aux_xr(data, data_var_referencia=None, func_cortes=None, max_re
               x1[r, cortes[r+1]-cortes[r]] = data[cortes[r+1]]        
     return x1
 
-
-# data_var_referencia = daTodos.isel(Archivo=0).sel(nom_var='AngBiela', lado='L', eje='x')
-# data = daData.isel(Archivo=0).sel(nom_var='AngArtKnee', lado='L', eje='x').data
+# data_var_referencia = daData.isel(Archivo=0).sel(var_referencia)
+# data = daData.isel(Archivo=0).sel(nom_var='AngArtHip', lado='R', eje='x').data
 def corta_repes_xr(daData, frec=None, var_referencia=None, descarta_rep_ini=0, num_repes=None, descarta_rep_fin=0, incluye_primero_siguiente=True, func_cortes=None, max_repes=40, **args_func_cortes):
     """
     Función para hacer cortes en señales cíclicas
@@ -360,6 +359,7 @@ def corta_repes_xr(daData, frec=None, var_referencia=None, descarta_rep_ini=0, n
           .assign_coords(time=np.arange(0, len(da.time)/frec, 1/frec))
           .dropna(dim='repe', how='all').dropna(dim='time', how='all')
           )
+    
     return da
     
 # =============================================================================
