@@ -14,11 +14,15 @@ import xarray as xr
 #import scipy.signal
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.2.3.0'
-__date__ = '09/04/2022'
+__version__ = 'v.3.0.0'
+__date__ = '07/06/2022'
 
 """
 Modificaciones:    
+    '07/06/2022', 'v.3.0.0'
+            - Intento de corrección cuando tiene que leer csv con variables EMG
+              modeladas, que se interfieren entre las xyz.
+        
     '09/04/2022', 'v.2.3.0'
             - Habilitado para cargar como dataframe y dataArray EMG Noraxon en modo Devices.
             - Incluye el tiempo en una columna.
@@ -131,12 +135,28 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
     
     else: #para trajectories y Models
         #primero asigna los nombres según el propio archivo
-        nomVars=['Frame', 'Sub Frame']
-        for i in range(2,len(nomCols),3):
-            if "'" not in nomCols[i] and "''" not in nomCols[i]: #elimina las posibles columnas de velocidad y aceleración
+        # nomVars=['Frame', 'Sub Frame']
+        # for i in range(2,len(nomCols),3):
+        #     if "'" not in nomCols[i] and "''" not in nomCols[i] and 'EMG' not in nomCols[i]: #elimina las posibles columnas de velocidad y aceleración
+        #         print(nomCols[i])    
+        #         nomVars.append(nomColsVar[i].split(':')[1]+'_' + nomCols[i])#X
+        #         nomVars.append(nomColsVar[i].split(':')[1]+'_' + nomCols[i+1])#Y
+        #         nomVars.append(nomColsVar[i].split(':')[1]+'_' + nomCols[i+2])#Z
+        
+        nomVars=['Frame', 'Sub Frame']        
+        for i in range(2,len(nomCols)):
+            if nomCols[i] in 'xX' and "'" not in nomCols[i] and "''" not in nomCols[i]:
+                #print(nomCols[i], nomColsVar[i])
                 nomVars.append(nomColsVar[i].split(':')[1]+'_' + nomCols[i])#X
                 nomVars.append(nomColsVar[i].split(':')[1]+'_' + nomCols[i+1])#Y
                 nomVars.append(nomColsVar[i].split(':')[1]+'_' + nomCols[i+2])#Z
+            elif 'EMG' in nomCols[i]:
+                 #print(nomCols[i], nomColsVar[i])
+                 nomVars.append(nomColsVar[i].split(':')[1]+'_' + nomCols[i])
+            #else:
+                #print(nomCols[i])
+                
+                
     
     # [i for i in nomColsVar if "'" in i]
     # nomColsVar = [i for i in nomColsVar if "'" not in i]
@@ -157,6 +177,10 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
     dfReturn = pd.read_csv(nombreArchivo, delimiter=separador, header=None, skiprows=inicioBloque+4, skipfooter=finArchivo-finBloque-5, usecols=range(len(nomVars)), engine='python')
     dfReturn = dfReturn.drop(index=0).reset_index(drop=True).astype(float) #borra la primera fila, que contiene las unidades
     
+    # x=pd.read_csv(nombreArchivo, delimiter=separador, header=inicioBloque, skipfooter=finArchivo-finBloque-5, engine='python')
+    # x.columns
+    # sub_nom_cols = x.iloc[0,:]
+    
     #Nombra encabezado
     if nomBloque == 'Devices':
         if 'Noraxon Ultium' in nomVars[3]:
@@ -170,6 +194,9 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
         var = ['_'.join(s.split('_')[:-1]) for s in nomVars[:len(nomVars)]] #gestiona si la variable tiene separador '_', lo mantiene
         coord = [s.split(':')[-1].lower() for s in nomCols[:len(nomVars)]] #pasa coordenadas a minúscula
         dfReturn.columns = pd.MultiIndex.from_tuples(list(zip(*[var,coord])), names=['nom_var', 'eje'])
+        #Elimina columnas con variables modeladas EMG si las hay
+        dfReturn = dfReturn.drop(columns=dfReturn.filter(regex='emg'))
+        #dfReturn.duplicated().sum()
         dimensiones = ['nom_var', 'eje', 'time']
         var_name=['nom_var', 'eje']
         
@@ -184,8 +211,9 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
         #if nomBloque == 'Devices':
         #    dfReturn.columns = dfReturn.columns.droplevel(1)
 
-#dfReturn.iloc[:,2:].melt(id_vars='time', var_name=['nom_var', 'eje']).set_index(dimensiones).to_xarray().to_array()
+        #dfReturn.iloc[:,2:].melt(id_vars='time', var_name=['nom_var', 'eje']).set_index(dimensiones).to_xarray().to_array()
 
+#TODO: Arreglar esto que no funciona pasar a xarray
         daReturn = (dfReturn.iloc[:,2:]
                     #.assign(**{'time':np.arange(len(dfReturn))/frec})
                     .melt(id_vars='time', var_name=var_name).set_index(dimensiones)
@@ -287,7 +315,7 @@ if __name__ == '__main__':
     ruta_Archivo = r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconConHuecoInicio_S27_WHT_T2_L01.csv'
     nombreArchivo = Path(ruta_Archivo)
     dfDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', returnFrec=True)
-    dfDatos['R5Meta_Z'].plot()
+    dfDatos['R5Meta_z'].plot()
 
     #Con formato dataarray de xArray    
     ruta_Archivo = r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconSinHuecos_01_Carrillo_FIN.csv'
@@ -343,11 +371,19 @@ if __name__ == '__main__':
 
     
     #Lectura device EMG
-    ruta_Archivo =r'F:\Investigacion\Proyectos\BikeFitting\Bikefitting\PruebasEMG\08-04-22\Dinamico02.csv'
+    ruta_Archivo =r'F:\Investigacion\Proyectos\BikeFitting\Bikefitting\EstudioEMG_MVC\Registros\11-Victor\Victor\Normal-00.csv'
     nombreArchivo = Path(ruta_Archivo)
     dfDatosFlat = read_vicon_csv(nombreArchivo, nomBloque='Devices')
     dfDatosFlat = read_vicon_csv(nombreArchivo, nomBloque='Devices', header_format='multi')
     dfDatosMulti, daDatos, frec = read_vicon_csv(nombreArchivo, nomBloque='Devices', header_format='multi', returnFrec=True, formatoxArray=True)
     dfDatosFlat['EMG1'].plot()
     daDatos.sel(nom_var='EMG1').plot(x='time')
+    
+    
+    #Lectura Modelos con variables modeladas EMG por medio
+    ruta_Archivo =r'F:\Investigacion\Proyectos\BikeFitting\Bikefitting\EstudioEMG_MVC\Registros\11-Victor\Victor\Normal-00.csv'
+    nombreArchivo = Path(ruta_Archivo)
+    dfDatosMulti, frec = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', header_format='multi', returnFrec=True)
+    dfDatosMulti['AngBiela'].plot()    
+    #En este formato no funciona con xarray
  
