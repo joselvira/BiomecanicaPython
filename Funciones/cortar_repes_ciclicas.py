@@ -230,18 +230,20 @@ def corta_simple_aux_xr(data, data_var_referencia=None, func_cortes=None, max_re
     """
     Función intermedia para poder utilizar la función cortar_repes_ciclicas_xr        
     """
+    
     import itertools
     cortes = func_cortes(data_var_referencia.data, **args_func_cortes)
     
     #Ajusta el corte inicial y final si hace falta
     cortes = cortes[descarta_rep_ini:]
+    
     if num_repes==None:
         cortes = cortes[:len(cortes)-descarta_rep_fin]
     else: #si se pide un nº determinado de repeticiones desde la inicial
-        if len(cortes) > num_repes:
+        if len(cortes) >= num_repes:
             cortes = cortes[:num_repes+1]
         else:
-            print('No hay suficiente número de repeticiones en el bloque {0}, se trunca hasta el final'.format(n))  
+            print('No hay suficiente número de repeticiones en el bloque, se trunca hasta el final')  
     
     x1 = np.full((max_repes, len(data)),np.nan)
     if len(cortes) > 0: #Si no ha encontrado cortes, devolverá el array vacío
@@ -258,7 +260,10 @@ def corta_simple_aux_xr(data, data_var_referencia=None, func_cortes=None, max_re
     return x1
 
 # data_var_referencia = daData.isel(Archivo=0).sel(var_referencia)
-# data = daData.isel(Archivo=0).sel(nom_var='AngArtHip', lado='R', eje='x').data
+# data = daData.isel(Archivo=0).sel(nom_var='AngArtHip', lado='L', eje='x').data
+# data = daData.isel(Archivo=0).sel(nom_var='AngArtHip', eje='x').data
+# data = daData.isel(Archivo=0).sel(nom_var='REC').data
+# **dict(threshold=0.0, n_above=2, corte_ini=1, show=True)
 def corta_repes_xr(daData, frec=None, var_referencia=None, descarta_rep_ini=0, num_repes=None, descarta_rep_fin=0, incluye_primero_siguiente=True, func_cortes=None, max_repes=40, **args_func_cortes):
     """
     Función para hacer cortes en señales cíclicas
