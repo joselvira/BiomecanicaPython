@@ -19,8 +19,9 @@ __date__ = '15/12/2022'
 
 """
 Modificaciones:
-    '15/12/2022', 'v.3.0.0'
-            - Todas las columnas son convertidas a dtype='float32'.
+    '15/12/2022', 'v.3.0.1'
+            - Todas las columnas son convertidas a dtype='float32' para ocupar
+              menos espacio.
         
     '07/06/2022', 'v.3.0.0'
             - Intento de corrección cuando tiene que leer csv con variables EMG
