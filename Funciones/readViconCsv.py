@@ -14,11 +14,14 @@ import xarray as xr
 #import scipy.signal
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.3.0.0'
-__date__ = '07/06/2022'
+__version__ = 'v.3.0.1'
+__date__ = '15/12/2022'
 
 """
-Modificaciones:    
+Modificaciones:
+    '15/12/2022', 'v.3.0.0'
+            - Todas las columnas son convertidas a dtype='float32'.
+        
     '07/06/2022', 'v.3.0.0'
             - Intento de corrección cuando tiene que leer csv con variables EMG
               modeladas, que se interfieren entre las xyz.
@@ -175,7 +178,7 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
     
     #Con pandas directamente funciona (para evitar error si primera línea no son datos, lee la fila de las unidades y luego la quita)
     dfReturn = pd.read_csv(nombreArchivo, delimiter=separador, header=None, skiprows=inicioBloque+4, skipfooter=finArchivo-finBloque-5, usecols=range(len(nomVars)), engine='python')
-    dfReturn = dfReturn.drop(index=0).reset_index(drop=True).astype(float) #borra la primera fila, que contiene las unidades
+    dfReturn = dfReturn.drop(index=0).reset_index(drop=True).astype('float32') #borra la primera fila, que contiene las unidades
     
     # x=pd.read_csv(nombreArchivo, delimiter=separador, header=inicioBloque, skipfooter=finArchivo-finBloque-5, engine='python')
     # x.columns
@@ -278,7 +281,7 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
         return dfReturn
 
 # =============================================================================
-# %%        
+# %% PRUEBAS
 # =============================================================================
 if __name__ == '__main__':
     from pathlib import Path
