@@ -14,12 +14,15 @@ import scipy.signal
 
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.1.5.2'
-__date__ = '03/08/2022'
+__version__ = 'v.1.5.3'
+__date__ = '08/01/2023'
 
 
 """
 Modificaciones:
+    08/01/2023, v1.5.3
+        - Ahora cuando se pasa un dataarray conserva el tipo de datos original.
+    
     03/08/2022, v1.5.2
         - Ahora cuando se pasa un dataarray conserva los atributos.
         
@@ -109,6 +112,7 @@ def filtrar_Butter(dat_orig, fr, fc, order=2.0, kind='low', returnRMS=False, sho
         DatFilt = xr.apply_ufunc(scipy.signal.filtfilt, b, a, dat_orig.interpolate_na(dim='time', method='linear', fill_value='extrapolate')) #rellena los nan con datos interpolados
         DatFilt = DatFilt.where(xr.where(np.isnan(dat_orig), False, True), np.nan) #recupera el nº de datos original rellenando con nan los finales como el original
         DatFilt.attrs = dat_orig.attrs
+        DatFilt = DatFilt.astype(dat_orig.dtype)
         
         if returnRMS or show==True:
             RMS=pd.DataFrame()
