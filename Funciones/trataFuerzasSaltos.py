@@ -4,10 +4,9 @@ Created on Tue Aug  2 20:33:55 2022
 
 @author: josel
 """
-"""
-Clase con funciones para tratar fuerzas de saltos desde archivos de plataforma
-de fuerzas.
-"""
+
+from __future__ import annotations
+from typing import Optional, Union
 
 import numpy as np
 import xarray as xr
@@ -18,6 +17,7 @@ import time #para cuantificar tiempos de procesado
 from pathlib import Path
 
 from detecta import detect_onset
+#from scipy.signal import find_peaks #sustituir por detecta?????
 import scipy.integrate as integrate
 
 __author__ = 'Jose Luis Lopez Elvira'
@@ -89,14 +89,21 @@ def calcula_peso(daDatos, ventana_peso=None, show=False):
     
     if isinstance(ventana_peso, xr.DataArray):
         def peso_indiv_xSD(data, vent0, vent1):
+            vent0 = int(vent0)
+            vent1 = int(vent1)
+            
             peso=[]
             peso.append(data[vent0:vent1].mean())
             peso.append(data[vent0:vent1].std())
-            # plt.plot(data[vent0:vent1])
+            
+            #plt.plot(data[vent0:vent1])
             # plt.axhline(data[vent0:vent1].mean(), ls='--', lw=0.5)            
             return np.asarray(peso)
         
-        daPeso = xr.apply_ufunc(peso_indiv_xSD, daDatos.sel(eje='z'), ventana_peso.sel(ventana='ini'), ventana_peso.sel(ventana='fin'),
+        if 'eje' in daDatos.dims:
+            daDatos = daDatos.sel(eje='z')
+            
+        daPeso = xr.apply_ufunc(peso_indiv_xSD, daDatos, ventana_peso.sel(evento='iniAnalisis'), ventana_peso.sel(evento='finAnalisis'),
                        input_core_dims=[['time'], [], []],
                        output_core_dims=[['stat']],
                        #exclude_dims=set(('time',)),
@@ -131,7 +138,7 @@ def calcula_peso(daDatos, ventana_peso=None, show=False):
 
 
 def detecta_despegue_aterrizaje(daDatos, tipo_test, umbral=10.0, show=False):
-    def detect_onset_aux(data, ID, repe, **args_func_cortes):
+    def detect_onset_aux(data, **args_func_cortes):
         if np.count_nonzero(~np.isnan(data))==0:
             return np.array([np.nan, np.nan])
         #plt.plot(data)
@@ -139,7 +146,7 @@ def detecta_despegue_aterrizaje(daDatos, tipo_test, umbral=10.0, show=False):
         # print(ID, repe)
         ind = detect_onset(-data, **args_func_cortes)
         if len(ind)<1:
-            print(f'No se ha encontrado despegue/aterrizaje en archivo ID {ID}, repe {repe}')
+            print('No se ha encontrado despegue/aterrizaje en archivo')
             return np.array([np.nan, np.nan])
         # if tipo_test == 'CMJ':
         #     ind=ind[0] #coge el primer bloque que encuentra
@@ -155,8 +162,11 @@ def detecta_despegue_aterrizaje(daDatos, tipo_test, umbral=10.0, show=False):
         
     #data = daDatos[0,0,-1].data
     #args_func_cortes = dict(threshold=-umbral, n_above=50, show=True)
-    daCorte = xr.apply_ufunc(detect_onset_aux, daDatos.sel(eje='z'), daDatos.ID, daDatos.repe,
-                   input_core_dims=[['time'],[],[]],
+    if 'eje' in daDatos.dims:
+        daDatos = daDatos.sel(eje='z')
+        
+    daCorte = xr.apply_ufunc(detect_onset_aux, daDatos,
+                   input_core_dims=[['time']],
                    output_core_dims=[['evento']],
                    #exclude_dims=set(('time',)),
                    vectorize=True,
@@ -170,6 +180,9 @@ def detecta_despegue_aterrizaje(daDatos, tipo_test, umbral=10.0, show=False):
 
 
 def detecta_ini_mov(daDatos, tipo_test, daPeso=None, daDespegue=None, SDx=10, show=False):
+    if 'eje' in daDatos.dims:
+        daDatos = daDatos.sel(eje='z')
+    
     if tipo_test=='DJ':
         def detect_onset_aux(data, **args_func_cortes):
             #plt.plot(data)
@@ -181,7 +194,7 @@ def detecta_ini_mov(daDatos, tipo_test, daPeso=None, daDespegue=None, SDx=10, sh
         
         #data= daDatos[0,0,2].data
         #args_func_cortes = dict(threshold=-10.0, n_above=50, show=False)
-        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos.sel(eje='z'),
+        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos,
                        input_core_dims=[['time']],
                        #output_core_dims=[['peso']],
                        #exclude_dims=set(('time',)),
@@ -212,7 +225,7 @@ def detecta_ini_mov(daDatos, tipo_test, daPeso=None, daDespegue=None, SDx=10, sh
         #sdpeso = (daPeso[0,1].sel(stat='sd')*SDx).data
         #umbral = (daPeso[0,1].sel(stat='media') - daPeso[0,1].sel(stat='sd')*SDx).data
         #idespegue = daDespegue[0,1].data
-        daCorte = xr.apply_ufunc(detect_iniMov_peso_pcto, daDatos.sel(eje='z'), daPeso.sel(stat='media'), daPeso.sel(stat='media')*SDx/100, daDespegue,
+        daCorte = xr.apply_ufunc(detect_iniMov_peso_pcto, daDatos, daPeso.sel(stat='media'), daPeso.sel(stat='media')*SDx/100, daDespegue,
                                    input_core_dims=[['time'], [], [], []],
                                    #output_core_dims=[['peso']],
                                    #exclude_dims=set(('time',)),
@@ -255,7 +268,7 @@ def detecta_ini_mov(daDatos, tipo_test, daPeso=None, daDespegue=None, SDx=10, sh
         data = daDatos.sel(ID='2PLAT_01_40', eje='z', repe=3).data
         peso = daPeso.sel(ID='2PLAT_01_40', repe=3,stat='media')
         """
-        daCorte = xr.apply_ufunc(detect_iniMov_peso_pcto, daDatos.sel(eje='z'), daPeso.sel(stat='media'), daPeso.sel(stat='media')*SDx/100, daDespegue,
+        daCorte = xr.apply_ufunc(detect_iniMov_peso_pcto, daDatos, daPeso.sel(stat='media'), daPeso.sel(stat='media')*SDx/100, daDespegue,
                                    input_core_dims=[['time'], [], [], []],
                                    #output_core_dims=[['peso']],
                                    #exclude_dims=set(('time',)),
@@ -312,7 +325,9 @@ def detecta_fin_mov(daDatos, tipo_test, daPeso=None, daAterrizaje=None, SDx=2):
     #data = daDatos[0,1,-1].data
     #umbral = daPeso[0,1,0].data
     #iaterrizaje = daAterrizaje[0,1].data
-    daCorte = xr.apply_ufunc(detect_onset_aux, daDatos.sel(eje='z'), daPeso.sel(stat='media') , daAterrizaje, daDatos.ID,
+    if 'eje' in daDatos.dims:
+        daDatos = daDatos.sel(eje='z')
+    daCorte = xr.apply_ufunc(detect_onset_aux, daDatos, daPeso.sel(stat='media') , daAterrizaje, daDatos.ID,
                    input_core_dims=[['time'], [], [], []],
                    #output_core_dims=[['peso']],
                    #exclude_dims=set(('time',)),
@@ -342,6 +357,9 @@ def detecta_fin_mov(daDatos, tipo_test, daPeso=None, daAterrizaje=None, SDx=2):
 
 def detecta_maxFz(daDatos, tipo_test, daPeso=None, daEventos=None):
     #from detecta import detect_peaks
+    if 'eje' in daDatos.dims:
+        daDatos = daDatos.sel(eje='z')
+    
     if tipo_test in ['CMJ', 'DJ', 'DJ2P']:
         def detect_onset_aux(data, ini, fin):
             try:
@@ -360,7 +378,7 @@ def detecta_maxFz(daDatos, tipo_test, daPeso=None, daEventos=None):
         ini = daEventos[0,1].sel(evento='iniMov').data
         fin = daEventos[0,1].sel(evento='despegue').data
         """
-        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos.sel(eje='z'), daEventos.sel(evento='iniMov').data, daEventos.sel(evento='despegue').data,
+        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos, daEventos.sel(evento='iniMov').data, daEventos.sel(evento='despegue').data,
                                    input_core_dims=[['time'], [], []],
                                    #output_core_dims=[['evento']],
                                    #exclude_dims=set(('evento',)),
@@ -375,6 +393,9 @@ def detecta_maxFz(daDatos, tipo_test, daPeso=None, daEventos=None):
 
 def detecta_minFz(daDatos, tipo_test, daPeso=None, daEventos=None):
     #from detecta import detect_peaks
+    if 'eje' in daDatos.dims:
+        daDatos = daDatos.sel(eje='z')
+    
     if tipo_test=='CMJ':
         def detect_onset_aux(data, ini, fin):
             try:
@@ -393,7 +414,7 @@ def detecta_minFz(daDatos, tipo_test, daPeso=None, daEventos=None):
         #ini = daEventos[0,1].sel(evento='iniMov').data
         #fin = daEventos[0,1].sel(evento='maxFlex').data
         
-        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos.sel(eje='z'), daEventos.sel(evento='iniMov').data, daEventos.sel(evento='maxFlex').data,
+        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos, daEventos.sel(evento='iniMov').data, daEventos.sel(evento='maxFlex').data,
                                    input_core_dims=[['time'], [], []],
                                    #output_core_dims=[['evento']],
                                    #exclude_dims=set(('evento',)),
@@ -414,10 +435,10 @@ def detecta_minFz(daDatos, tipo_test, daPeso=None, daEventos=None):
         """
         data= daDatos[0,0,2].data
         ini = daEventos[0,0].sel(evento='iniMov').data
-        fin = daEventos[0,0].sel(evento='iniImpPositivo').data
+        fin = daEventos[0,0].sel(evento='iniImpPos').data
         args_func_cortes = dict(threshold=-10.0, n_above=50, show=True)
         """
-        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos.sel(eje='z'), daEventos.sel(evento='iniImpPositivo').data,
+        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos, daEventos.sel(evento='iniImpPos').data,
                        input_core_dims=[['time'],[]],
                        #output_core_dims=[['evento']],
                        #exclude_dims=set(('time',)),
@@ -431,6 +452,9 @@ def detecta_minFz(daDatos, tipo_test, daPeso=None, daEventos=None):
         
         
 def detecta_ini_fin_impulso(daDatos, tipo_test, daPeso=None, daEventos=None, show=False):
+    if 'eje' in daDatos.dims:
+        daDatos = daDatos.sel(eje='z')
+    
     if tipo_test in ['CMJ', 'DJ']:
         def detect_onset_aux(data, peso, iinimov):
             try:
@@ -446,13 +470,13 @@ def detecta_ini_fin_impulso(daDatos, tipo_test, daPeso=None, daEventos=None, sho
         peso = daPeso[1,0].sel(stat='media').data
         iinimov = daEventos[1,0].data
         """
-        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos.sel(eje='z'), daPeso.sel(stat='media').data, daEventos.data,
+        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos, daPeso.sel(stat='media').data, daEventos.data,
                                    input_core_dims=[['time'], [], []],
                                    output_core_dims=[['evento']],
                                    #exclude_dims=set(('evento',)),
                                    vectorize=True,
                                    #kwargs=dict(threshold=daPeso.sel(stat='media'), n_above=50, show=False)
-                                   ).assign_coords(evento=['iniImpPositivo', 'finImpPositivo'])
+                                   ).assign_coords(evento=['iniImpPos', 'finImpPos'])
         
     elif tipo_test in ['DJ2P']:
         def detect_onset_aux(data, peso, iinimov):
@@ -471,13 +495,13 @@ def detecta_ini_fin_impulso(daDatos, tipo_test, daPeso=None, daEventos=None, sho
         peso = daPeso[1,0].sel(stat='media').data
         iinimov = daIniMov[1,0].data
         """
-        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos.sel(eje='z'), daPeso.sel(stat='media').data, daEventos.data,
+        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos, daPeso.sel(stat='media').data, daEventos.data,
                                    input_core_dims=[['time'], [], []],
                                    output_core_dims=[['evento']],
                                    #exclude_dims=set(('evento',)),
                                    vectorize=True,
                                    #kwargs=dict(threshold=daPeso.sel(stat='media'), n_above=50, show=False)
-                                   ).assign_coords(evento=['iniImpPositivo', 'finImpPositivo'])
+                                   ).assign_coords(evento=['iniImpPos', 'finImpPos'])
         
     return daCorte
         
@@ -487,6 +511,9 @@ def detecta_max_flex(daDatos, tipo_test, v=None, daPeso=None, daEventos=None):
     Para calcular desde 'DJ' tiene que venir reversed y con la velocidad como
     parámetro.
     """
+    if 'eje' in daDatos.dims:
+        daDatos = daDatos.sel(eje='z')
+    
     if tipo_test in ['CMJ', 'DJ', 'DJ2P']:
         def detect_onset_aux(data, ini, fin):
             try:                
@@ -504,7 +531,7 @@ def detecta_max_flex(daDatos, tipo_test, v=None, daPeso=None, daEventos=None):
         #Calcula la velocidad, OJO, sin haber hecho el ajuste de offsetFz
         if not isinstance(v, xr.DataArray):
             v = calcula_variables(daDatos, daPeso=daPeso, daEventos=daEventos.sel(evento=['iniMov', 'finMov']))['v']
-        v = v.sel(eje='z') #se queda solo con eje z la haya calculado aquí o venga calculada del reversed
+        #v = v.sel(eje='z') #se queda solo con eje z la haya calculado aquí o venga calculada del reversed
         #v.plot.line(x='time', col='ID', col_wrap=5, sharey=False)
         """
         data = v[1,0].data
@@ -512,7 +539,7 @@ def detecta_max_flex(daDatos, tipo_test, v=None, daPeso=None, daEventos=None):
         ini = daEventos[1,0].sel(evento='iniMov').data
         fin = daEventos[1,0].sel(evento='despegue').data
         """
-        daCorte = xr.apply_ufunc(detect_onset_aux, v, daEventos.sel(evento='iniImpPositivo'), daEventos.sel(evento='despegue'),
+        daCorte = xr.apply_ufunc(detect_onset_aux, v, daEventos.sel(evento='iniImpPos'), daEventos.sel(evento='despegue'),
                                    input_core_dims=[['time'], [], []],
                                    #output_core_dims=[['peso']],
                                    #exclude_dims=set(('time',)),
@@ -587,7 +614,62 @@ def detecta_max_flex_desdeV(daDatos, tipo_test, daInstantes=None):
     return daCorte
 
 
-def graficas_eventos(daDatos, daEventos, daPeso=None, ruta_trabajo=None, nom_archivo_graf_global=None):
+def detecta_inicio_cero(daDatos, umbral=100):
+    """Detecta la parte final si se ha salido de la plataforma antes de tiempo.
+    Se le deben pasar los archivos ya detectados como que tienen el final incorrecto.
+    """
+    def detecta_inicio_cero_aux(data, umbral):
+        #print(ID)            
+        if np.count_nonzero(~np.isnan(data))==0:
+            return np.nan
+        
+        try:
+            ind = detect_onset(data, threshold=umbral, n_above=50, show=False)        
+            ind = ind[0,0] #+1 para coger el que ya ha superado el umbral            
+        except:
+            ind = len(data) #por si no encuentra el criterio. Poner nan?
+        return float(ind)
+
+    """
+    data = daDatos[0].data    
+    """
+    da = xr.apply_ufunc(detecta_inicio_cero_aux, daDatos, umbral,
+                   input_core_dims=[['time'],[]],
+                   #output_core_dims=[['peso']],
+                   #exclude_dims=set(('time',)),
+                   vectorize=True,
+                   #kwargs=dict(threshold=10, n_above=50, show=False)
+                   )        
+    return da
+
+def detecta_final_cero(daDatos, umbral=100):
+    """Detecta la parte final si se ha salido de la plataforma antes de tiempo.
+    Se le deben pasar los archivos ya detectados como que tienen el final incorrecto.
+    """
+    def detecta_final_cero_aux(data, umbral):
+        #print(ID)            
+        if np.count_nonzero(~np.isnan(data))==0:
+            return np.nan
+        try:
+            ind = detect_onset(data, threshold=umbral, n_above=50, show=False)        
+            ind = ind[-1,1]
+        except:
+            ind = len(data) #por si no encuentra el criterio. Poner nan?
+        return float(ind)
+
+    
+    da = xr.apply_ufunc(detecta_final_cero_aux, daDatos, umbral,
+                   input_core_dims=[['time'],[]],
+                   #output_core_dims=[['peso']],
+                   #exclude_dims=set(('time',)),
+                   vectorize=True,
+                   #kwargs=dict(threshold=10, n_above=50, show=False)
+                   )       
+    return da
+    
+
+
+def graficas_eventos(daDatos, daEventos=None, daPeso=None, ruta_trabajo=None, nom_archivo_graf_global=None):
     import seaborn as sns
     
     #Si no se incluye nombre archivo no guarda el pdf
@@ -596,16 +678,80 @@ def graficas_eventos(daDatos, daEventos, daPeso=None, ruta_trabajo=None, nom_arc
             ruta_trabajo = Path(ruta_trabajo)
         nompdf = (ruta_trabajo / nom_archivo_graf_global).with_suffix('.pdf')
         pdf_pages = PdfPages(nompdf)
+    
     if 'eje' in daDatos.dims: #por si se envía un da filtrado por eje
         daDatos=daDatos.sel(eje='z')
 
-    def dibuja_X(x,y, color, **kwargs):      
+    """            
+    dfDatos = daDatos.to_dataframe().reset_index()
+    if 'eje' in dfDatos.columns:
+        dfDatos = dfDatos.drop(columns='eje')
+    #dfDatos = daDatos.isel(ID=slice(None,3)).to_dataframe().reset_index().drop(columns='eje').dropna(how='any').astype(object)
+    """
+    
+    #Por si no hay dimensión 'repe'
+    if 'repe' in daDatos.dims: #dfDatos.columns:
+        fils_cols = dict(col='repe', row='ID')
+    else:
+        fils_cols = dict(col='ID', col_wrap=4)
+    
+        
+    col={'iniMov':'b', 'finMov':'b', 'iniImpPos':'orange', 'maxFz':'brown', 'minFz':'cyan', 'maxFlex':'g', 'finImpPos':'orange', 'despegue':'r', 'aterrizaje':'r', 'iniAnalisis':'k', 'finAnalisis':'k'}#['C0', 'C1', 'C2']
+    
+    g=daDatos.plot.line(x='time', alpha=0.8, aspect=1.5, sharey=False, **fils_cols, lw=1)
+    
+    if isinstance(daEventos, xr.DataArray):
+        for h, ax in enumerate(g.axs): #extrae cada fila
+            for i in range(len(ax)): #extrae cada axis (gráfica)                    
+                dimensiones = g.name_dicts[h, i]
+                if dimensiones is None: #para cuando quedan huecos al final de la cuadrícula
+                    continue
+                
+                #plt.plot(g.data.sel(g.name_dicts[h, i]))
+                #ID = str(g.data.loc[g.name_dicts[h, i]].ID.data)
+                
+                if daPeso is not None: #isinstance(daPeso, xr.DataArray):
+                    ax[i].axhline(daPeso.sel(dimensiones).sel(stat='media').data, color='C0', lw=1, ls='--', dash_capstyle='round', alpha=0.6)
+                               
+                for ev in daEventos.sel(dimensiones):#.evento:
+                    # #No muestra inicio y fin de análisis
+                    # if str(ev.evento.data) in ['iniAnalisis', 'finAnalisis']: #se salta estos dos porque el array viene cortado por sus valores y tienen escala distinta
+                    #     continue
+                    #print(str(ev.data))
+                    if ev.isnull().all():#np.isnan(ev): #si no existe el evento
+                        continue
+                    
+                    ax[i].axvline(x=ev/daDatos.frec, c=col[str(ev.evento.data)], lw=0.5, ls='--', dashes=(5, 5), dash_capstyle='round', alpha=0.5)
+                    
+                    y_texto = ax[i].get_ylim()[1]*0.97 if str(ev.evento.data) not in ['minFz', 'despegue', 'maxFz'] else ax[i].get_ylim()[1]*0.75
+                    ax[i].text(ev / daDatos.frec, y_texto, ev.evento.data,
+                             ha='right', va='top', rotation='vertical', c='k', alpha=0.6, fontsize='xx-small', 
+                             bbox=dict(facecolor=col[str(ev.evento.data)], alpha=0.2, edgecolor='none', boxstyle='round,pad=0.3'+',rounding_size=.5'), transform=ax[i].transData)
+                
+            
+    
+    
+    """
+    def fun(x,y): #prueba para dibujar con xarray directamente
+        print(x,y)
+    g=daDatos.isel(ID=slice(None,3)).plot.line(x='time', **fils_cols)
+    g.map_dataarray_line(fun, x='time', y='fuerza', hue='repe')
+    """
+    # g = sns.relplot(data=dfDatos, x='time', y='Fuerza', col='ID', col_wrap=4, hue='repe',
+    #                 estimator=None, ci=95, units='repe',
+    #                 facet_kws={'sharey': False, 'legend_out':True}, solid_capstyle='round', kind='line',
+    #                 palette=sns.color_palette(col), alpha=0.7)
+    
+    
+    """
+    #Versión Seaborn
+    def dibuja_X(x,y, color, **kwargs):   
         ID = kwargs['data'].loc[:,'ID'].unique()[0]
         repe = kwargs['data'].loc[:,'repe'].unique()
         #print(y, ID, repe, color, kwargs.keys())
         #plt.vlines(daEventos.sel(ID=ID, repe=repe)/daDatos.frec, ymin=kwargs['data'].loc[:,'Fuerza'].min(), ymax=kwargs['data'].loc[:,'Fuerza'].max(), colors=['C0', 'C1', 'C2'], lw=1, ls='--', alpha=0.6) # plt.gca().get_ylim()[1] transform=plt.gca().transData)
         #Líneas del peso
-        if isinstance(daPeso, xr.DataArray):
+        if daPeso is not None: #isinstance(daPeso, xr.DataArray):
             plt.axhline(daPeso.sel(ID=ID, repe=repe, stat='media').data, color='C0', lw=1, ls='--', dash_capstyle='round', alpha=0.6)
        
         for ev in daEventos.sel(ID=ID, repe=repe).evento:
@@ -620,29 +766,16 @@ def graficas_eventos(daDatos, daEventos, daPeso=None, ruta_trabajo=None, nom_arc
                     plt.text(daEventos.sel(ID=ID, repe=repe, evento=ev).data/daDatos.frec, y_texto, ev.data,
                              ha='right', va='top', rotation='vertical', c='k', alpha=0.6, fontsize=8, 
                              bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', boxstyle='round,pad=0.3'+',rounding_size=.5'), transform=plt.gca().transData)
-                
-    dfDatos = daDatos.to_dataframe().reset_index().drop(columns='eje')
     
-    col={'iniMov':'b', 'finMov':'b', 'iniImpPositivo':'orange', 'maxFz':'brown', 'minFz':'cyan', 'maxFlex':'g', 'finImpPositivo':'orange', 'despegue':'r', 'aterrizaje':'r', 'iniAnalisis':'k', 'finAnalisis':'k'}#['C0', 'C1', 'C2']
-    
-    """
-    def fun(x,y): #prueba para dibujar con xarray directamente
-        print(x,y)
-    g=daDatos.sel(eje='z').plot.line(x='time', row='ID', col='repe')
-    g.map_dataarray_line(fun, x='ID', y=daDatos, hue='repe')
-    """
-    # g = sns.relplot(data=dfDatos, x='time', y='Fuerza', col='ID', col_wrap=4, hue='repe',
-    #                 estimator=None, ci=95, units='repe',
-    #                 facet_kws={'sharey': False, 'legend_out':True}, solid_capstyle='round', kind='line',
-    #                 palette=sns.color_palette(col), alpha=0.7)
-    
-    g = sns.relplot(data=dfDatos[dfDatos['Fuerza'].notnull()], x='time', y='Fuerza', row='ID', col='repe', #ATENCIÓN en esta versión de seaborn (12.1) falla con datos nan, por eso se seleccionan los notnull()
+    g = sns.relplot(data=dfDatos[dfDatos['Fuerza'].notnull()], x='time', y='Fuerza', #ATENCIÓN en esta versión de seaborn (12.1) falla con datos nan, por eso se seleccionan los notnull()                    
                     #estimator=None, ci=95, units='repe',
                     facet_kws={'sharey': False, 'legend_out':True}, solid_capstyle='round', kind='line',
-                    alpha=0.7, aspect=1.5) #palette=sns.color_palette(col), 
+                    alpha=0.7, aspect=1.5,
+                    **fils_cols) #palette=sns.color_palette(col), 
+    if daEventos is not None:
+        g.map_dataframe(dibuja_X, x='time', y='Fuerza', lw=0.25, alpha=0.3)
+    """
     
-    g.map_dataframe(dibuja_X, x='time', y='Fuerza', lw=0.25, alpha=0.3)
-      
     """
     def dibuja_xr(x,y, **kwargs):
         ID = kwargs['data'].loc[:,'ID'].unique()[0]
@@ -684,7 +817,7 @@ def recorta_ventana_analisis(daDatos, ventana_analisis):
             pass
         return d2 #datos[int(ini):int(fin)]
     
-    daCortado = xr.apply_ufunc(corta_ventana, daDatos, ventana_analisis.isel(evento=0).sel(ID=daDatos.ID, repe=daDatos.repe), ventana_analisis.isel(evento=1).sel(ID=daDatos.ID, repe=daDatos.repe),
+    daCortado = xr.apply_ufunc(corta_ventana, daDatos, ventana_analisis.isel(evento=0), ventana_analisis.isel(evento=1), #.sel(ID=daDatos.ID, repe=daDatos.repe)
                    input_core_dims=[['time'], [], []],
                    output_core_dims=[['time']],
                    exclude_dims=set(('time',)),
@@ -695,6 +828,7 @@ def recorta_ventana_analisis(daDatos, ventana_analisis):
     daCortado = daCortado.astype(daDatos.dtype)
     daCortado.attrs = daDatos.attrs
     daCortado.name = daDatos.name
+    
     #daCortado.plot.line(x='time', row='ID', col='eje')
     return daCortado
 
@@ -722,6 +856,8 @@ def ajusta_offsetFz_vuelo(daDatos, tipo_test, umbral=20.0, pcto_ventana=5, show=
     return daDatos#datos
 
 def reset_Fz_vuelo(daDatos, tipo_test, umbral=20.0, pcto_ventana=5, show=False): #, ventana_vuelo=None):
+    if 'eje' in daDatos.dims:    
+        daDatos = daDatos.sel(eje='z')
     vuelo = detecta_despegue_aterrizaje(daDatos, tipo_test, umbral=umbral)
     #reduce la ventana un poco para evitar los rebotes posibles del filtrado
     recorte_ventana = ((vuelo.loc[dict(evento='aterrizaje')]-vuelo.loc[dict(evento='despegue')])*pcto_ventana/100).astype('int32')
@@ -729,7 +865,7 @@ def reset_Fz_vuelo(daDatos, tipo_test, umbral=20.0, pcto_ventana=5, show=False):
     vuelo.loc[dict(evento='aterrizaje')] -= recorte_ventana
            
     with xr.set_options(keep_attrs=True):
-        daDatos = xr.where(~daDatos.isnull(), daDatos.where(daDatos.sel(eje='z')>umbral, 0.0), daDatos)
+        daDatos = xr.where(~daDatos.isnull(), daDatos.where(daDatos > umbral, 0.0), daDatos)
         daDatos.time.attrs['units'] ='s' #por alguna razón lo cambiaba a newtons
         #daDatos.plot.line(row='ID', col='repe', hue='eje', sharey=False)
     
@@ -897,10 +1033,10 @@ def calcula_results(daCinet=None, dsCinem=None, daPeso=None, daResults=None, daE
         return daInt
         
     # ImpNegDescenso
-    daResults.loc[dict(var='impNegDescenso')] = integra_completo(daCinet - daPeso.sel(stat='media').drop_vars('stat'), daEventos=daEventos.sel(evento=['iniMov', 'iniImpPositivo']))
-    daResults.loc[dict(var='ImpPositDescenso')] = integra_completo(daCinet - daPeso.sel(stat='media').drop_vars('stat'), daEventos=daEventos.sel(evento=['iniImpPositivo', 'maxFlex']))
-    daResults.loc[dict(var='ImpPositAscenso')] = integra_completo(daCinet - daPeso.sel(stat='media').drop_vars('stat'), daEventos=daEventos.sel(evento=['maxFlex', 'finImpPositivo']))
-    daResults.loc[dict(var='ImpNegAscenso')] = integra_completo(daCinet - daPeso.sel(stat='media').drop_vars('stat'), daEventos=daEventos.sel(evento=['finImpPositivo', 'despegue']))
+    daResults.loc[dict(var='impNegDescenso')] = integra_completo(daCinet - daPeso.sel(stat='media').drop_vars('stat'), daEventos=daEventos.sel(evento=['iniMov', 'iniImpPos']))
+    daResults.loc[dict(var='ImpPositDescenso')] = integra_completo(daCinet - daPeso.sel(stat='media').drop_vars('stat'), daEventos=daEventos.sel(evento=['iniImpPos', 'maxFlex']))
+    daResults.loc[dict(var='ImpPositAscenso')] = integra_completo(daCinet - daPeso.sel(stat='media').drop_vars('stat'), daEventos=daEventos.sel(evento=['maxFlex', 'finImpPos']))
+    daResults.loc[dict(var='ImpNegAscenso')] = integra_completo(daCinet - daPeso.sel(stat='media').drop_vars('stat'), daEventos=daEventos.sel(evento=['finImpPos', 'despegue']))
     
     
     return daResults
@@ -910,9 +1046,14 @@ def calcula_results(daCinet=None, dsCinem=None, daPeso=None, daResults=None, daE
 
 # =============================================================================
 # PRUEBA METIDO EN UNA CLASE
+"""
+Clase con funciones para tratar fuerzas de saltos desde archivos de plataforma
+de fuerzas.
+"""
 class trata_fuerzas_saltos:
-    def __init__(self, datos=None, tipo_test='CMJ'):
-        self.datos = datos
+    def __init__(self, data: Optional[xr.DataArray]=xr.DataArray(),
+                 tipo_test: Optional[str]='CMJ'):
+        self.data = data
         self.tipo_test = tipo_test
         self.peso=None
         
@@ -952,7 +1093,7 @@ class trata_fuerzas_saltos:
 
 
 # =============================================================================
-# %%
+# %% PRUEBAS
 # =============================================================================
 if __name__ == "__main__":
     import numpy as np
@@ -1003,7 +1144,7 @@ if __name__ == "__main__":
     dj = trata_fuerzas_saltos(tipo_test='DJ')
     
     dj.carga_preprocesados(ruta_trabajo, nomArchivoPreprocesado)
-    dj.datos
+    dj.data
     dj.tipo_test
     
     dj.calcula_peso(ventana=[-1500, -1000], show=True)
