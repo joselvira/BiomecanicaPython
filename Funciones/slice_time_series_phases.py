@@ -16,12 +16,16 @@ import matplotlib.pyplot as plt
 
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.3.1.0'
-__date__ = '13/02/2023'
+__version__ = 'v.3.1.1'
+__date__ = '11/03/2023'
 
 
 """
 Modificaciones:
+    11/03/2023, v3.1.1
+    - Solucionado error con función find_peaks_aux. Hace copia antes de buscar
+      cortes.
+    
     13/02/2023, v3.1.0
     - Las funciones find_peaks_aux y detect_onset_detecta_aux admiten un
       argumento para buscar cortes a partir de la media + x veces SD.
@@ -243,8 +247,10 @@ class SliceTimeSeriesPhases():
             else:
                 args_func_events['height'] = np.mean(data[~np.isnan(data)]) + xSD * np.std(data[~np.isnan(data)])#, where=~np.isnan(data)) + xSD * np.std(data, where=~np.isnan(data))
         
+        data = data.copy()
+        
         #Deal with nans
-        data = data[np.isnan(data)] = -np.inf
+        data[np.isnan(data)] = -np.inf
         
         events, _ = find_peaks(data, **args_func_events)
         
@@ -265,7 +271,7 @@ class SliceTimeSeriesPhases():
 
 
 # =============================================================================
-# %% TRIALS
+# %% TESTS
 # =============================================================================
 
 if __name__ == '__main__':
@@ -395,7 +401,7 @@ if __name__ == '__main__':
                  )
     daCortado.sel(nom_var='b').plot.line(x='time', col='tiempo', hue='phase', row='ID')
     
-    
+      
     daCortado = (SliceTimeSeriesPhases(data=daTodos, func_events=SliceTimeSeriesPhases.find_peaks_aux, 
                              reference_var=dict(tiempo='pre', nom_var='b'),
                              discard_phases_ini=0, n_phases=None, discard_phases_end=0,
