@@ -25,6 +25,7 @@ Modificaciones:
     11/03/2023, v3.1.1
     - Solucionado error con función find_peaks_aux. Hace copia antes de buscar
       cortes.
+    - Incluido parámetro show en función detect_onset_detecta_aux.
     
     13/02/2023, v3.1.0
     - Las funciones find_peaks_aux y detect_onset_detecta_aux admiten un
@@ -204,11 +205,11 @@ class SliceTimeSeriesPhases():
     # =============================================================================
     # Custom function to adapt from Detecta detect_onset
     # =============================================================================
-    def detect_onset_detecta_aux(data, event_ini=0, xSD=None, **args_func_events):
+    def detect_onset_detecta_aux(data, event_ini=0, xSD=None, show=False, **args_func_events):
         #Si se pasa como argumento corte_ini=1, coge el corte del final de cada ventana
         try:
             from detecta import detect_onset
-        except:		
+        except ImportError:		
             raise Exception('This function needs Detecta to be installed (https://pypi.org/project/detecta/)')
         
         # try: #detect_onset returns 2 indexes. If not specified, select the first
@@ -216,11 +217,12 @@ class SliceTimeSeriesPhases():
         #     args_func_events.pop('event_ini', None)
         # except:
         #     event_ini=0
-        if xSD is not None: #the threshold is defined by the mean + x times the standar deviation
+        if xSD is not None: #the threshold is defined by the mean + x times the standard deviation
             if 'threshold' in args_func_events:
                 args_func_events.pop('threshold', None)
             args_func_events['threshold'] = np.mean(data, where=~np.isnan(data)) + np.std(data, where=~np.isnan(data))*xSD
             #print(args_func_events, np.mean(data, where=~np.isnan(data)), np.std(data, where=~np.isnan(data)), xSD)
+        plt.plot(data)
         events = detect_onset(data, **args_func_events)
         
         if event_ini==1:
@@ -229,6 +231,10 @@ class SliceTimeSeriesPhases():
         else:
             events = events[:, event_ini] #keeps the first or second value of each data pair
             events = events[1:] #removes the last one because it is usually incomplete
+        print(events)
+        if show:
+            SliceTimeSeriesPhases.show_events(data, events, threshold=args_func_events['threshold'])
+            
         return events
     
     
@@ -238,7 +244,7 @@ class SliceTimeSeriesPhases():
     def find_peaks_aux(data, xSD=None, show=False, **args_func_events):
         try:
             from scipy.signal import find_peaks
-        except:		
+        except ImportError:		
             raise Exception('This function needs scipy.signal to be installed')
         if xSD is not None: #the threshold is defined by the mean + x times the standar deviation
             if isinstance(xSD, list):
@@ -255,7 +261,7 @@ class SliceTimeSeriesPhases():
         events, _ = find_peaks(data, **args_func_events)
         
         if show:
-            SliceTimeSeriesPhases.show_events(data, events, args_func_events['height'])
+            SliceTimeSeriesPhases.show_events(data, events, threshold=args_func_events['height'])
             
         return events #keeps the first value of each data pair
 
