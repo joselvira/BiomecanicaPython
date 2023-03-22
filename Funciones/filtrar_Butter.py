@@ -14,12 +14,15 @@ import scipy.signal
 
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.1.5.3'
-__date__ = '08/01/2023'
+__version__ = 'v.1.5.4'
+__date__ = '22/03/2023'
 
 
 """
 Modificaciones:
+    22/03/2023, v1.5.4
+        - En filtro band pass corregido de lfilt a filtfilt.
+        
     08/01/2023, v1.5.3
         - Ahora cuando se pasa un dataarray conserva el tipo de datos original.
     
@@ -177,7 +180,7 @@ def _plot(dat_orig, DatFilt, RMS, fc, ax):
 # =============================================================================
         
 # =============================================================================
-# %% Función filtrar low o High pass
+# %% Función filtrar band pass
 # =============================================================================
 def filtrar_Butter_bandpass(dat_orig, fr, fclow, fchigh, order=2.0, show=False, ax=None):
     """    
@@ -223,11 +226,11 @@ def filtrar_Butter_bandpass(dat_orig, fr, fclow, fchigh, order=2.0, show=False, 
         DatFilt=pd.DataFrame()
         RMS=pd.DataFrame()
         for i in range(dat_orig.shape[1]):
-            DatFilt[dat_orig.columns[i]] = scipy.signal.lfilter(b, a, dat_orig.iloc[:, i])
+            DatFilt[dat_orig.columns[i]] = scipy.signal.filtfilt(b, a, dat_orig.iloc[:, i])
         DatFilt.index=dat_orig.index #esto es necesario por si se pasa un slice del dataframe
         
     elif isinstance(dat_orig, pd.Series):
-        DatFilt = pd.Series(scipy.signal.lfilter(b, a, dat_orig), index=dat_orig.index, name=dat_orig.name)
+        DatFilt = pd.Series(scipy.signal.filtfilt(b, a, dat_orig), index=dat_orig.index, name=dat_orig.name)
     
     elif isinstance(dat_orig, xr.DataArray):
         #DatFilt = xr.apply_ufunc(scipy.signal.filtfilt, b, a, dat_orig.dropna(dim='time')) #se asume que hay una dimensión tiempo
@@ -235,7 +238,7 @@ def filtrar_Butter_bandpass(dat_orig, fr, fclow, fchigh, order=2.0, show=False, 
         DatFilt = DatFilt.where(xr.where(np.isnan(dat_orig), False, True), np.nan) #recupera el nº de datos original rellenando con nan los finales como el original
         
     else: #si los datos no son pandas dataframe
-        DatFilt = scipy.signal.lfilter(b, a, dat_orig)
+        DatFilt = scipy.signal.filtfilt(b, a, dat_orig)
         
     if show:
         _plot(dat_orig, DatFilt, RMS, fclow, ax)
