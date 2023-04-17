@@ -21,12 +21,17 @@ from detecta import detect_onset
 import scipy.integrate as integrate
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.1.0.4'
-__date__ = '15/03/2023'
+__version__ = 'v.1.0.5'
+__date__ = '16/04/2023'
 
 """
 Modificaciones:
-    '15/03/2023', v.1.0.4
+    16/04/2023, v.1.0.5
+            - Corregido en detect_despegue_aterrizaje que se quede siempre
+              con el último que encuentra. Si el último está al final del
+              registro, coge el anterior.
+    
+    15/03/2023, v.1.0.4
             - Al buscar despegue y aterrizaje, si no los encuentra da una
               segunda oportunidad ajustando el umbral al valor mínimo del
               registro.
@@ -176,6 +181,17 @@ def chequea_igualdad_ini_fin(daDatos, margen=20, ventana=None, retorna=None, sho
     return daResta if retorna=='resta' else daDatos.loc[dict(ID=daDatos.ID.isin(daCorrectos.ID))]
     
 
+def estima_inifin_analisis(daDatos, daEventos, ventana=4000, tipo_test='CMJ', umbral=20.0):
+    #Intenta estimar el inicio y final del análisis a partir del centro del vuelo
+    
+    #Busca despegue y aterrizaje provisionales
+    vuelo = detecta_despegue_aterrizaje(daDatos, tipo_test, umbral=umbral).mean('evento')
+        
+    daEventos.loc[dict(evento='iniAnalisis')] = xr.where((vuelo - 2000) >= 0, vuelo - 2000, 0).astype(int)
+    daEventos.loc[dict(evento='finAnalisis')] = xr.where((vuelo + 1999) < len(daDatos.time), vuelo + 1999, len(daDatos.time)-1).astype(int)
+    
+    return daEventos
+
 
 
 def calcula_peso(daDatos, ventana_peso=None, show=False):
@@ -258,14 +274,17 @@ def detecta_despegue_aterrizaje(daDatos, tipo_test, umbral=10.0, show=False):
         #     ind=ind[1] #coge el primer bloque que encuentra
         #     ind[1]+=1 #para que el aterrizaje coincida con pasado umbral
         
-        #Independientemente del tipo de salto que sea, se queda con el últimoque en cuentre
-        ind=ind[-1]
+        #Chequea si ha detectado el vuelo al final
+        if ind[-1,-1] < int(len(data) * 0.9):
+            ind=ind[-1] #Independientemente del tipo de salto que sea, se queda con el último que encuentre
+        else:
+            ind=ind[-2]
         
         return ind.astype('float')#[1]
     
     """
     data = daDatos.sel(ID='PRE_07-RubenToledoPozuelo_SJ_0', repe=1).data
-    data = daDatos[0,-1].data
+    data = daDatos[0,0].data
     args_func_cortes = dict(threshold=-umbral, n_above=50, show=True)
     """
     if 'eje' in daDatos.dims:
@@ -284,7 +303,7 @@ def detecta_despegue_aterrizaje(daDatos, tipo_test, umbral=10.0, show=False):
     return daCorte
 
 def detecta_despegue_aterrizaje_cusum(daDatos, tipo_test, umbral=10.0, show=False):
-    #prueba para detectar varios eventos a la vez, pero parece muy irregular
+    #Prueba para detectar varios eventos a la vez, pero parece muy irregular
     def detect_onset_aux(data, **args_func_cortes):
         if np.count_nonzero(~np.isnan(data))==0:
             return np.array([np.nan, np.nan])
@@ -330,7 +349,7 @@ def detecta_despegue_aterrizaje_cusum(daDatos, tipo_test, umbral=10.0, show=Fals
 
 
 
-def detecta_ini_mov(daDatos, tipo_test='CMJ', daPeso=None, daDespegue=None, SDx=5, show=False):
+def detecta_ini_mov(daDatos, tipo_test='CMJ', daPeso=None, daEventos=None, SDx=5, umbral=10.0, show=False):
     if 'eje' in daDatos.dims:
         daDatos = daDatos.sel(eje='z')
     
@@ -350,7 +369,7 @@ def detecta_ini_mov(daDatos, tipo_test='CMJ', daPeso=None, daDespegue=None, SDx=
                        #output_core_dims=[['peso']],
                        #exclude_dims=set(('time',)),
                        vectorize=True,
-                       kwargs=dict(threshold=-daPeso, n_above=50, show=False)
+                       kwargs=dict(threshold=-umbral, n_above=50, show=show)
                        )
         #daDatos.sel(eje='z').isel(time=daCorte-1)
         
@@ -360,9 +379,9 @@ def detecta_ini_mov(daDatos, tipo_test='CMJ', daPeso=None, daDespegue=None, SDx=
                 return np.nan
             try:
                 #Pasada inicial para ver cuándo baja por debajo del umbral peso+XSD
-                ini1 = detect_onset(-data[:int(idespegue)], threshold=-(peso-umbral), n_above=50, show=False)
+                ini1 = detect_onset(-data[:int(idespegue)], threshold=-(peso-umbral), n_above=50, show=show)
                 #Pasada hacia atrás buscando ajuste fino que supera el peso
-                ini2 = detect_onset(data[ini1[-1,0]:0:-1], threshold=peso, n_above=5, show=False)
+                ini2 = detect_onset(data[ini1[-1,0]:0:-1], threshold=peso, n_above=5, show=show)
             
                 ini = ini1[-1,0] - ini2[0,0] + 1 #+1 para coger el que ya ha pasado por debajo del peso
                 #data[ini] #peso
@@ -371,14 +390,14 @@ def detecta_ini_mov(daDatos, tipo_test='CMJ', daPeso=None, daDespegue=None, SDx=
             return float(ini)
         
         """
-        data = daDatos[0].data
-        peso = daPeso[0].sel(stat='media').data
+        data = daDatos[0,0].data
+        peso = daPeso[0,0].sel(stat='media').data
         pcto = 10
-        sdpeso = (daPeso[0].sel(stat='sd')*SDx).data
-        umbral = (daPeso[0].sel(stat='media') - daPeso[0].sel(stat='sd')*SDx).data
-        idespegue = daDespegue[0].data
+        sdpeso = (daPeso[0,0].sel(stat='sd')*SDx).data
+        umbral = (daPeso[0,0].sel(stat='sd')*SDx).data
+        idespegue = daEventos[0,0].sel(evento='despegue').data
         """
-        daCorte = xr.apply_ufunc(detect_iniMov_peso_pcto, daDatos, daPeso.sel(ID=daDatos.ID, stat='media'), daPeso.sel(ID=daDatos.ID, stat='media')*SDx/100, daDespegue.sel(ID=daDatos.ID),
+        daCorte = xr.apply_ufunc(detect_iniMov_peso_pcto, daDatos, daPeso.sel(ID=daDatos.ID, stat='media'), daPeso.sel(ID=daDatos.ID, stat='media')*SDx/100, daEventos.sel(ID=daDatos.ID).sel(evento='despegue'),
                                    input_core_dims=[['time'], [], [], []],
                                    #output_core_dims=[['peso']],
                                    #exclude_dims=set(('time',)),
@@ -390,11 +409,14 @@ def detecta_ini_mov(daDatos, tipo_test='CMJ', daPeso=None, daDespegue=None, SDx=
         def detect_iniMov_peso_pcto(data, peso, umbral, idespegue):
             if np.count_nonzero(~np.isnan(data))==0:
                 return np.nan
+            
             try:                
                 #Pasada inicial para ver cuándo supera el umbral peso+XSD
-                ini1 = detect_onset(data[:int(idespegue)], threshold=(peso+umbral), n_above=50, show=False)
+                ini1 = detect_onset(data[:int(idespegue)], threshold=(peso+umbral), n_above=50, show=show)
+                print(idespegue)
+                
                 #Pasada hacia atrás buscando ajuste fino que quede por debajo del peso
-                ini2 = detect_onset(-data[ini1[-1,0]:0:-1], threshold=-peso, n_above=5, show=False)
+                ini2 = detect_onset(-data[ini1[-1,0]:0:-1], threshold=-peso, n_above=5, show=show)
             
                 ini = ini1[-1,0] - ini2[0,0] + 1 #+1 para coger el que ya ha pasado por encima del peso
                 #data[ini] #peso
@@ -403,20 +425,55 @@ def detecta_ini_mov(daDatos, tipo_test='CMJ', daPeso=None, daDespegue=None, SDx=
             return float(ini)
         
         """
-        data = daDatos[0].data
-        peso = daPeso[0].sel(stat='media').data
+        data = daDatos[0,0].data
+        peso = daPeso[0,0].sel(stat='media').data
         pcto = 10
-        sdpeso = (daPeso[0].sel(stat='sd')*SDx).data
-        umbral = sdpeso #(daPeso[0].sel(stat='media') + daPeso[0].sel(stat='sd')*SDx).data
-        idespegue = daDespegue[0].data
+        sdpeso = (daPeso[0,0].sel(stat='sd')*SDx).data
+        umbral =  (daPeso[0,0].sel(stat='sd')*SDx).data
+        idespegue = daEventos[0,0].sel(evento='despegue').data
         """
-        daCorte = xr.apply_ufunc(detect_iniMov_peso_pcto, daDatos, daPeso.sel(ID=daDatos.ID, stat='media'), daPeso.sel(ID=daDatos.ID, stat='media')*SDx/100, daDespegue.sel(ID=daDatos.ID),
+        daCorte = xr.apply_ufunc(detect_iniMov_peso_pcto, daDatos, daPeso.sel(ID=daDatos.ID, stat='media'), daPeso.sel(ID=daDatos.ID, stat='media')*SDx/100, daEventos.sel(ID=daDatos.ID).sel(evento='despegue'),
                                    input_core_dims=[['time'], [], [], []],
                                    #output_core_dims=[['peso']],
                                    #exclude_dims=set(('time',)),
                                    vectorize=True,
                                    #kwargs=dict(threshold=10, n_above=50, show=False)
                                    )
+        
+        
+        
+    elif tipo_test=='SJPreac':
+        from detecta import detect_cusum
+        
+        def detect_iniMov_peso_pcto(data, peso, umbral, idespegue):
+            if np.count_nonzero(~np.isnan(data))==0:
+                return np.nan
+            try:
+                _, ini, _, _ = detect_cusum(data[:int(idespegue)], threshold=80, drift=1, ending=True, show=show)
+                ini = ini[0]
+                
+            except:
+                ini = 0 #por si no encuentra el criterio
+                
+            return float(ini)
+        
+        """
+        data = daDatos[0,0].data
+        peso = daPeso[0,0].sel(stat='media').data
+        pcto = 10
+        sdpeso = (daPeso[0,0].sel(stat='sd')*SDx).data
+        umbral = (daPeso[0].sel(stat='sd')*SDx).data
+        idespegue = daEventos[0,0].sel(evento='despegue').data
+        """
+        daCorte = xr.apply_ufunc(detect_iniMov_peso_pcto, daDatos, daPeso.sel(ID=daDatos.ID, stat='media'), daPeso.sel(ID=daDatos.ID, stat='media')*SDx/100, daEventos.sel(ID=daDatos.ID).sel(evento='despegue'),
+                                   input_core_dims=[['time'], [], [], []],
+                                   #output_core_dims=[['peso']],
+                                   #exclude_dims=set(('time',)),
+                                   vectorize=True,
+                                   #kwargs=dict(threshold=10, n_above=50, show=False)
+                                   )
+  
+    
         
     elif tipo_test=='DJ2P':
         def detect_iniMov_peso_pcto(data, peso, umbral, idespegue):
@@ -425,13 +482,13 @@ def detecta_ini_mov(daDatos, tipo_test='CMJ', daPeso=None, daDespegue=None, SDx=
             try:
                 #Intenta detectar qué es antes: descenso por debajo del peso o ascenso por encima (dando saltito)
                 #Pasada inicial para ver cuándo baja por debajo del umbral peso+XSD
-                ini1 = detect_onset(-data[:int(idespegue)], threshold=-(peso-umbral), n_above=50, show=False)
+                ini1 = detect_onset(-data[:int(idespegue)], threshold=-(peso-umbral), n_above=50, show=show)
                 #Pasada hacia atrás buscando ajuste fino que supera el peso
                 ini2 = detect_onset(data[ini1[0,0]:0:-1], threshold=peso, n_above=5, show=False)
                 ini_abajo = ini1[0,0] - ini2[0,0] + 1 #+1 para coger el que ya ha pasado por debajo del peso
                 
                 #Pasada inicial para ver cuándo baja por debajo del umbral peso+XSD
-                ini1 = detect_onset(data[:int(idespegue)], threshold=(peso+umbral), n_above=50, show=False)
+                ini1 = detect_onset(data[:int(idespegue)], threshold=(peso+umbral), n_above=50, show=show)
                 #Pasada hacia atrás buscando ajuste fino que supera el peso
                 ini2 = detect_onset(data[ini1[0,0]:0:-1], threshold=peso, n_above=5, show=False)
                 ini_arriba = ini1[0,0] - ini2[0,0] + 1 #+1 para coger el que ya ha pasado por encima del peso
@@ -453,13 +510,14 @@ def detecta_ini_mov(daDatos, tipo_test='CMJ', daPeso=None, daDespegue=None, SDx=
         data = daDatos.sel(ID='2PLAT_01_40', eje='z', repe=3).data
         peso = daPeso.sel(ID='2PLAT_01_40', repe=3,stat='media')
         """
-        daCorte = xr.apply_ufunc(detect_iniMov_peso_pcto, daDatos, daPeso.sel(stat='media'), daPeso.sel(stat='media')*SDx/100, daDespegue,
+        daCorte = xr.apply_ufunc(detect_iniMov_peso_pcto, daDatos, daPeso.sel(stat='media'), daPeso.sel(stat='media')*SDx/100, daEventos.sel(evento='despegue'),
                                    input_core_dims=[['time'], [], [], []],
                                    #output_core_dims=[['peso']],
                                    #exclude_dims=set(('time',)),
                                    vectorize=True,
                                    #kwargs=dict(threshold=10, n_above=50, show=False)
                                    )
+        
         
         
         """
@@ -491,11 +549,14 @@ def detecta_ini_mov(daDatos, tipo_test='CMJ', daPeso=None, daDespegue=None, SDx=
         
         #Comprobaciones
         #daDatos.sel(eje='z').isel(time=daCorte-1) #        
-                
+
+    #Si hay datos, ajusta el límite al inicio análisis
+    daCorte = xr.where(daCorte.notnull(), daCorte.where(daCorte>daEventos.sel(evento='iniAnalisis'), daEventos.sel(evento='iniAnalisis')), np.nan)
+           
     return daCorte
 
 
-def detecta_fin_mov(daDatos, tipo_test, daPeso=None, daAterrizaje=None, SDx=2):
+def detecta_fin_mov(daDatos, tipo_test, daPeso=None, daEventos=None, SDx=2):
     def detect_onset_aux(data, umbral, iaterrizaje, ID):
         #print(ID)            
         if np.count_nonzero(~np.isnan(data))==0:
@@ -513,7 +574,7 @@ def detecta_fin_mov(daDatos, tipo_test, daPeso=None, daAterrizaje=None, SDx=2):
     """
     if 'eje' in daDatos.dims:
         daDatos = daDatos.sel(eje='z')
-    daCorte = xr.apply_ufunc(detect_onset_aux, daDatos, daPeso.sel(stat='media') , daAterrizaje, daDatos.ID,
+    daCorte = xr.apply_ufunc(detect_onset_aux, daDatos, daPeso.sel(stat='media') , daEventos.sel(evento='aterrizaje'), daDatos.ID,
                    input_core_dims=[['time'], [], [], []],
                    #output_core_dims=[['peso']],
                    #exclude_dims=set(('time',)),
@@ -529,14 +590,18 @@ def detecta_fin_mov(daDatos, tipo_test, daPeso=None, daAterrizaje=None, SDx=2):
         #data = daDatos[0,1,-1].data
         #umbral = daPeso[0,1,0].data
         #idespegue = daAterrizaje[0,1].data
-        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos.sel(eje='z'), daPeso.sel(stat='media') , daAterrizaje,
+        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos.sel(eje='z'), daPeso.sel(stat='media') , daEventos.sel(evento='aterrizaje'),
                        input_core_dims=[['time'], [], []],
                        #output_core_dims=[['peso']],
                        #exclude_dims=set(('time',)),
                        vectorize=True,
                        #kwargs=dict(threshold=10, n_above=50, show=False)
                        )
-                
+
+    
+    #Ajusta el límite al inicio análisis
+    daCorte = xr.where(daCorte.notnull(), daCorte.where(daCorte<daEventos.sel(evento='finAnalisis'), daEventos.sel(evento='finAnalisis')), np.nan)
+          
     return daCorte
 
 
@@ -546,7 +611,7 @@ def detecta_maxFz(daDatos, tipo_test, daPeso=None, daEventos=None):
     if 'eje' in daDatos.dims:
         daDatos = daDatos.sel(eje='z')
     
-    if tipo_test in ['SJ', 'CMJ', 'DJ', 'DJ2P']:
+    if tipo_test in ['SJ', 'SJPreac', 'CMJ', 'DJ', 'DJ2P']:
         def detect_onset_aux(data, ini, fin):
             try:
                 ini=int(ini)
@@ -577,12 +642,12 @@ def detecta_maxFz(daDatos, tipo_test, daPeso=None, daEventos=None):
 
 
 
-def detecta_minFz(daDatos, tipo_test, daPeso=None, daEventos=None):
+def detecta_minFz(daDatos, tipo_test, daPeso=None, daEventos=None, umbral=10.0, show=False):
     #from detecta import detect_peaks
     if 'eje' in daDatos.dims:
         daDatos = daDatos.sel(eje='z')
     
-    if tipo_test in ['SJ', 'CMJ']:
+    if tipo_test in ['SJ', 'SJPreac', 'CMJ']:
         def detect_onset_aux(data, ini, fin):
             try:
                 ini=int(ini)
@@ -632,9 +697,10 @@ def detecta_minFz(daDatos, tipo_test, daPeso=None, daEventos=None):
                        #output_core_dims=[['evento']],
                        #exclude_dims=set(('time',)),
                        vectorize=True,
-                       kwargs=dict(threshold=-10, n_above=50, show=False)
+                       kwargs=dict(threshold=-umbral, n_above=50, show=show)
                        )
-    
+     
+
     return daCorte
         
 
@@ -644,23 +710,26 @@ def detecta_ini_fin_impulso(daDatos, tipo_test, daPeso=None, daEventos=None, sho
     if 'eje' in daDatos.dims:
         daDatos = daDatos.sel(eje='z')
     
-    if tipo_test in ['SJ', 'CMJ', 'DJ']:
-        def detect_onset_aux(data, peso, iinimov):
+    if tipo_test in ['SJ', 'SJPreac', 'CMJ', 'DJ']:
+        def detect_onset_aux(data, peso, ini, fin):
             try:
-                ini1 = detect_onset(data[int(iinimov):], threshold=peso, n_above=100, show=False)                
-                ind = int(iinimov) + ini1[0]
+                ini=int(ini)
+                fin=int(fin)
+                ini1 = detect_onset(data[ini:fin], threshold=peso, n_above=100, show=False)                
+                ind = ini + ini1[0]
                 ind[1] += 1 #+1 para coger el que ya ha pasado por debajo del peso
                 #data[ini[1]+1] #peso
             except:
                 ind = np.array([np.nan, np.nan]) #por si no encuentra el criterio
             return ind.astype('float')            
         """
-        data = daDatos[1,0,-1].data
+        data = daDatos[1,-1].data
         peso = daPeso[1,0].sel(stat='media').data
-        iinimov = daEventos[1,0].data
+        ini = daEventos[1,0].sel(evento='iniMov').data
+        fin = daEventos[1,0].sel(evento='despegue').data
         """
-        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos, daPeso.sel(stat='media').data, daEventos.data,
-                                   input_core_dims=[['time'], [], []],
+        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos, daPeso.sel(stat='media').data, daEventos.sel(evento='iniMov'), daEventos.sel(evento='despegue'),
+                                   input_core_dims=[['time'], [], [], []],
                                    output_core_dims=[['evento']],
                                    #exclude_dims=set(('evento',)),
                                    vectorize=True,
@@ -668,24 +737,28 @@ def detecta_ini_fin_impulso(daDatos, tipo_test, daPeso=None, daEventos=None, sho
                                    ).assign_coords(evento=['iniImpPos', 'finImpPos'])
         
     elif tipo_test in ['DJ2P']:
-        def detect_onset_aux(data, peso, iinimov):
+        def detect_onset_aux(data, peso, ini, fin):
             try:
-                #busca cuándo inicia primer aterrizaje
+                ini=int(ini)
+                fin=int(fin)
+                
+                #busca cuándo inicia primer despegue
                 ini0 = detect_onset(data, threshold=30.0, n_above=100, show=False)[1,0]
-                ini1 = detect_onset(data[ini0:], threshold=peso, n_above=100, show=False)
+                ini1 = detect_onset(data[ini0:fin], threshold=peso, n_above=100, show=False)
                 ind = ini0 + ini1[0]
                 ind[1] += 1 #+1 para coger el que ya ha pasado por debajo del peso
                 #data[ind[0]-1] #peso
             except:
                 ind = np.array([np.nan, np.nan]) #por si no encuentra el criterio                
-            return ind.astype('float')            
+            return ind.astype('float')
         """
-        data = daDatos[1,0,-1].data
+        data = daDatos[1,0].data
         peso = daPeso[1,0].sel(stat='media').data
-        iinimov = daIniMov[1,0].data
+        ini = daEventos[1,0].sel(evento='iniMov').data
+        fin = daEventos[1,0].sel(evento='despegue').data
         """
-        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos, daPeso.sel(stat='media').data, daEventos.data,
-                                   input_core_dims=[['time'], [], []],
+        daCorte = xr.apply_ufunc(detect_onset_aux, daDatos, daPeso.sel(stat='media').data, daEventos.sel(evento='iniMov'), daEventos.sel(evento='despegue'),
+                                   input_core_dims=[['time'], [], [], []],
                                    output_core_dims=[['evento']],
                                    #exclude_dims=set(('evento',)),
                                    vectorize=True,
@@ -703,7 +776,7 @@ def detecta_max_flex(daDatos, tipo_test='CMJ', v=None, daPeso=None, daEventos=No
     if 'eje' in daDatos.dims:
         daDatos = daDatos.sel(eje='z')
     
-    if tipo_test in ['SJ', 'CMJ', 'DJ', 'DJ2P']:
+    if tipo_test in ['SJ', 'SJPreac', 'CMJ', 'DJ', 'DJ2P']:
         def detect_onset_aux(data, ini, fin):
             try:                
                 ini=int(ini)
@@ -864,7 +937,7 @@ def detecta_final_cero(daDatos, umbral=100):
     return da
     
 
-def detecta_eventos_estandar(daDatos, daEventos=None, daPeso=None, tipo_test='CMJ'):
+def detecta_eventos_estandar(daDatos, daEventos=None, daPeso=None, tipo_test='CMJ', umbral=10.0):
     if daPeso is None:
         raise Exception('No has introducido los datos del peso')
     
@@ -877,31 +950,32 @@ def detecta_eventos_estandar(daDatos, daEventos=None, daPeso=None, tipo_test='CM
                     ).copy()
     
     #Despegue y aterrizaje definitivo
-    daEventos.loc[dict(evento=['despegue', 'aterrizaje'])] = detecta_despegue_aterrizaje(daDatos, tipo_test=tipo_test, umbral=10.0)#, eventos=daEventosCMJ)
+    daEventos.loc[dict(evento=['despegue', 'aterrizaje'])] = detecta_despegue_aterrizaje(daDatos, tipo_test=tipo_test, umbral=umbral)#, eventos=daEventosCMJ)
     
     #Inicio movimiento, después de detectar el despegue
-    daEventos.loc[dict(evento='iniMov')] = detecta_ini_mov(daDatos, tipo_test=tipo_test, daPeso=daPeso, daDespegue=daEventos.sel(evento='despegue'))
+    daEventos.loc[dict(evento='iniMov')] = detecta_ini_mov(daDatos, tipo_test=tipo_test, daPeso=daPeso, daEventos=daEventos, umbral=umbral)#.sel(evento='despegue'))
     
     #Final del movimiento
-    daEventos.loc[dict(evento='finMov')] = detecta_fin_mov(daDatos, tipo_test=tipo_test, daPeso=daPeso, daAterrizaje=daEventos.sel(evento='aterrizaje'))
+    daEventos.loc[dict(evento='finMov')] = detecta_fin_mov(daDatos, tipo_test=tipo_test, daPeso=daPeso, daEventos=daEventos)#.sel(evento='aterrizaje'))
         
     #Ini y fin del impulso positivo
-    daEventos.loc[dict(evento=['iniImpPos', 'finImpPos'])] = detecta_ini_fin_impulso(daDatos, tipo_test=tipo_test, daPeso=daPeso, daEventos=daEventos.sel(evento='iniMov'))
+    daEventos.loc[dict(evento=['iniImpPos', 'finImpPos'])] = detecta_ini_fin_impulso(daDatos, tipo_test=tipo_test, daPeso=daPeso, daEventos=daEventos) #.sel(evento='iniMov'))
     
     #Maxima flexión rodillas batida
-    daEventos.loc[dict(evento='maxFlex')] = detecta_max_flex(daDatos, tipo_test=tipo_test, daPeso=daPeso, daEventos=daEventos)
+    if tipo_test != 'DJ':
+        daEventos.loc[dict(evento='maxFlex')] = detecta_max_flex(daDatos, tipo_test=tipo_test, daPeso=daPeso, daEventos=daEventos)
     
     #MaxFz, después de iniMov y despegue
     daEventos.loc[dict(evento='maxFz')] = detecta_maxFz(daDatos, tipo_test=tipo_test, daPeso=daPeso, daEventos=daEventos)
         
     #MinFz, después de iniMov y maxFlex
-    daEventos.loc[dict(evento='minFz')] = detecta_minFz(daDatos, tipo_test=tipo_test, daPeso=daPeso, daEventos=daEventos)
+    daEventos.loc[dict(evento='minFz')] = detecta_minFz(daDatos, tipo_test=tipo_test, daPeso=daPeso, daEventos=daEventos, umbral=umbral)
     
     return daEventos
 
 
 
-def graficas_eventos(daDatos, daEventos=None, daPeso=None, n_en_bloque=4, show_in_console=True, ruta_trabajo=None, nom_archivo_graf_global=None):
+def graficas_eventos(daDatos, daEventos=None, daPeso=None, n_en_bloque=4, show_in_console=True, ajusta_inifin=False, ruta_trabajo=None, nom_archivo_graf_global=None):
     """
     n_en_bloque sirve para ajustar el nº de gráficas por hoja. Si los datos
     tienen dimensión repe, n_en_bloque indica el nº de filas por hoja con repe columnas.
@@ -926,6 +1000,11 @@ def graficas_eventos(daDatos, daEventos=None, daPeso=None, n_en_bloque=4, show_i
     if daPeso is not None and 'eje' in daPeso.dims: #por si se envía un da filtrado por eje
         daPeso=daPeso.sel(eje='z')
 
+
+    if ajusta_inifin:
+        daDatos = recorta_ventana_analisis(daDatos, daEventos.sel(evento=['iniAnalisis', 'finAnalisis']))
+        daEventos = daEventos - daEventos.sel(evento='iniAnalisis')
+        
     """            
     dfDatos = daDatos.to_dataframe().reset_index()
     if 'eje' in dfDatos.columns:
@@ -944,7 +1023,7 @@ def graficas_eventos(daDatos, daEventos=None, daPeso=None, n_en_bloque=4, show_i
     
     
     def completar_en_grafica_xr(g):
-        for h, ax in enumerate(g.axs): #extrae cada fila
+        for h, ax in enumerate(g.axes):#.axs): #extrae cada fila
             for i in range(len(ax)): #extrae cada axis (gráfica)                    
                 dimensiones = g.name_dicts[h, i]
                 #print(dimensiones)
@@ -1123,7 +1202,7 @@ def recorta_ventana_analisis(daDatos, ventana_analisis):
 
 def ajusta_offsetFz_vuelo(daDatos, tipo_test='CMJ', umbral=20.0, pcto_ventana=5, show=False):
     #busca despegue y aterrizaje provisionales
-    vuelo = detecta_despegue_aterrizaje(daDatos, tipo_test, umbral=umbral)
+    vuelo = detecta_despegue_aterrizaje(daDatos, tipo_test, umbral=umbral, show=show)
     #reduce la ventana un poco para evitar los rebotes posibles del filtrado
     recorte_ventana = ((vuelo.loc[dict(evento='aterrizaje')]-vuelo.loc[dict(evento='despegue')])*pcto_ventana/100).astype('int32')
     vuelo.loc[dict(evento='despegue')] += recorte_ventana
@@ -1138,8 +1217,10 @@ def ajusta_offsetFz_vuelo(daDatos, tipo_test='CMJ', umbral=20.0, pcto_ventana=5,
         daDatos = daDatos - offset_vuelo
         
     if show:
-        recorta_ventana_analisis(daDatos, vuelo.sel(evento=['despegue', 'aterrizaje'])).plot.line(col='ID', col_wrap=4, hue='eje', sharey=False)
-            
+        try: #comprobar si es necesario cuando hay ejes
+            recorta_ventana_analisis(daDatos, vuelo.sel(evento=['despegue', 'aterrizaje'])).plot.line(col='ID', col_wrap=4, hue='eje', sharey=False)
+        except:
+            recorta_ventana_analisis(daDatos, vuelo.sel(evento=['despegue', 'aterrizaje'])).plot.line(col='ID', col_wrap=4, hue='repe', sharey=False)
     return daDatos#datos
 
 
@@ -1158,8 +1239,10 @@ def reset_Fz_vuelo(daDatos, tipo_test, umbral=20.0, pcto_ventana=5, show=False):
         #daDatos.plot.line(row='ID', col='repe', hue='eje', sharey=False)
     
     if show:
-        recorta_ventana_analisis(daDatos, vuelo+[-50, 50]).plot.line(col='ID', col_wrap=4, hue='eje', sharey=False)
-    
+        try:
+            recorta_ventana_analisis(daDatos, vuelo+[-50, 50]).plot.line(col='ID', col_wrap=4, hue='eje', sharey=False)
+        except:
+            recorta_ventana_analisis(daDatos, vuelo+[-50, 50]).plot.line(col='ID', col_wrap=4, hue='repe', sharey=False)
     return daDatos
     
     """
@@ -1193,7 +1276,7 @@ def reset_Fz_vuelo(daDatos, tipo_test, umbral=20.0, pcto_ventana=5, show=False):
     
     
 #TODO: SEGUIR PROBANDO ESTA FUNCIÓN PARA AJUSTAR TAMBIÉN LOS EJES X E Y
-def reset_F_vuelo(daDatos, tipo_test, umbral=20.0, pcto_ventana=5, show=False): #, ventana_vuelo=None):
+def reset_F_vuelo_ejes(daDatos, tipo_test, umbral=20.0, pcto_ventana=5, show=False): #, ventana_vuelo=None):
     if 'eje' in daDatos.dims:
         daDatosZ = daDatos.sel(eje='z')
     else:

@@ -109,23 +109,22 @@ class SliceTimeSeriesPhases():
             except:
                 return events
             
-            #Ajusta el corte inicial y final si hace falta
+            #If necessary, adjust initial an final events
             evts = evts[discard_phases_ini:]
             
             if n_phases==None:
                 evts = evts[:len(evts)-discard_phases_end]
-            else: #si se pide un nº determinado de repeticiones desde la inicial
+            else: #if a specific number of phases from the first event is required
                 if len(evts) >= n_phases:
                     evts = evts[:n_phases+1]
                 else: #not enought number of events in the block, trunkated to the end
                     pass
             events[:len(evts)] = evts
             return events
-
         
         if self.func_events==None:
             raise Exception('A function to detect the events must be specified')
-                
+        
         da = xr.apply_ufunc(detect_aux_idx,
                           self.data,
                           self.data.sel(self.reference_var),
@@ -146,7 +145,6 @@ class SliceTimeSeriesPhases():
         da = (da.assign_coords(n_event=range(len(da.n_event)))
               .dropna(dim='n_event', how='all').dropna(dim='n_event', how='all')
               )
-        
         self.events = da        
         return da
 
@@ -222,7 +220,7 @@ class SliceTimeSeriesPhases():
                 args_func_events.pop('threshold', None)
             args_func_events['threshold'] = np.mean(data, where=~np.isnan(data)) + np.std(data, where=~np.isnan(data))*xSD
             #print(args_func_events, np.mean(data, where=~np.isnan(data)), np.std(data, where=~np.isnan(data)), xSD)
-        plt.plot(data)
+        
         events = detect_onset(data, **args_func_events)
         
         if event_ini==1:
@@ -231,7 +229,7 @@ class SliceTimeSeriesPhases():
         else:
             events = events[:, event_ini] #keeps the first or second value of each data pair
             events = events[1:] #removes the last one because it is usually incomplete
-        print(events)
+        
         if show:
             SliceTimeSeriesPhases.show_events(data, events, threshold=args_func_events['threshold'])
             
