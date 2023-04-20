@@ -19,16 +19,24 @@ except:
 #import scipy.signal
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.4.0.1'
-__date__ = '27/03/2023'
+__version__ = 'v.4.0.3'
+__date__ = '19/04/2023'
 
 """
 Modificaciones:
-    17/04/2023, v.4.0.1
+    19/04/2023, v.4.0.3
+        - En Polars actual (0.17.2) no coindicen los saltos de línea cuando
+          empieza con línea en blanco.
+          
+    17/04/2023, v.4.0.2
         - Corregido error nombre variable archivo en read_vicon_csv_pl_xr.
         - Optimizada parte lectura con open en versión Polars.
+        - Puede cargar por separado datos EMG o Forces, aunque vayan en el
+          mismo archivo.
         - Cambiada nombre variables a n_var por conflicto en xarray, .var
           calcula la varianza.
+        - En función con Polars, La selección de variables la hace en el df
+          Polars, no en el dataarray.
 
     27/03/2023, v.4.0.0
         - Incluida una versión que lee con Polars y lo pasa a DataArray
@@ -61,86 +69,93 @@ Modificaciones:
         - Con el argumento formatoxArray se puede pedir que devuelva los datos en formato xArray
 """
 
-def read_vicon_csv_pl_xr(nom_archivo, nom_bloque='Model Outputs', nom_vars_cargar=None, separador=','):
+def read_vicon_csv_pl_xr(file, section='Model Outputs', nom_vars_cargar=None, coincidence='similar', sep=','):
+    """
+    Parameters
+    ----------
+    file : string or path of the file
+        DESCRIPTION.
+    section : string, optional
+        Kind of data variables to load.
+        Options: 'Trajectories', 'Model Outputs', 'Forces', 'EMG'
+        The default is 'Model Outputs'.
+    nom_vars_cargar : list, optional
+        DESCRIPTION. The default is None.
+    coincidence: string
+        When selecting which variables to load, allows strings containing the
+        indicated or forces to be exact.
+        Options: 'similar', 'exact'. The default is 'similar'.
+    sep : string, optional
+        Separator used in the csv file. The default is ','.
+
+    Returns
+    -------
+    Xarray DataArray.
+
+    """
+    if section in ['Forces', 'EMG']:
+        nom_bloque = 'Devices'
+    else:
+        nom_bloque = section
+    
+    
+    #Comprueba si hay líneas en blanco. En Polars actual (0.17.2) no coindicen los saltos de línea cuando empieza con línea en blanco
+    with open(file, mode='rt') as f:
+        offset_blank_ini = 0
         
-    with open(nom_archivo, mode='rt') as f:
-        num_Linea=0
+        while f.readline() in [u'\r\n', u'\n', 'ï»¿\n']:
+            offset_blank_ini += 1
+            
+    with open(file, mode='rt') as f:
+        num_lin = 0
         ini_bloque = None
         fin_bloque = None        
-        
+                    
         #Recorre todo el archivo para buscar el inicio y fin del bloque y el nº de líneas
-        for linea in f:            
+        for linea in f:
             #busca etiqueta del inicio del bloque
             if ini_bloque is None and nom_bloque in linea:
-                ini_bloque = num_Linea
+                ini_bloque = num_lin
                 #Lo que viene detrás de la etiqueta es la frecuencia
-                frecuencia = int(f.readline().replace(separador,'')) #quita el separador para los casos en los que el archivo ha sido guardado con Excel (completa línea con separador)
+                frecuencia = int(f.readline().replace(sep,'')) #quita el separador para los casos en los que el archivo ha sido guardado con Excel (completa línea con separador)
                 
                 #Carga el nombre de las columnas
-                nomColsVar = str(f.readline()[:-1]).split(separador) #nombreVariables
-                nomCols = str(f.readline()[:-1]).lower().split(separador) #nombre coordenadas X,Y,Z.
-                num_Linea+=3
+                nomColsVar = str(f.readline()[:-1]).split(sep) #nombreVariables
+                nomCols = str(f.readline()[:-1]).lower().split(sep) #nombre coordenadas X,Y,Z.
+                num_lin+=3
             
             #Cuando ya ha encontrado el inicio, pasa a buscar el final
             if ini_bloque is not None and fin_bloque is None and linea=='\n':
-                fin_bloque = num_Linea-1
-                
-            num_Linea+=1
-            
-        finArchivo = num_Linea
+                fin_bloque = num_lin-1                
+            num_lin+=1            
+        fin_archivo = num_lin
         
     if ini_bloque is None:
         raise Exception('No se ha encontrado el encabezado')
         return
         
-    """
-    with open(nom_archivo, mode='rt') as f:
-        numLinea=0
-        #busca etiqueta del inicio del bloque
-        linea = f.readline()
-        while nom_bloque not in linea:
-            if linea == '':        
-                raise Exception('No se ha encontrado el encabezado')
-                
-            numLinea+=1
-            linea = f.readline()
         
-        
-        iniBloque = numLinea
-               
-        #Lo que viene detrás de la etiqueta es la frecuencia
-        linea = f.readline()
-        frecuencia = int(linea.replace(separador,'')) #quita el separador para los casos en los que el archivo ha sido guardado con Excel (completa línea con separador)
-        
-        #Carga el nombre de las columnas
-        #linea = f.readline()
-        nomColsVar = str(f.readline()[:-1]).split(separador) #nombreVariables
-        nomCols = str(f.readline()[:-1]).lower().split(separador) #nombre coordenadas X,Y,Z.
-        #nomCols = [s.lower() for s in nomCols] # Lo fuerza a minúsculas
-        
-        #Busca etiqueta del final del bloque
-        while linea!='\n':
-            if linea == '':         
-                raise Exception('No se ha encontrado el final del bloque')
-                
-            numLinea+=1
-            linea = f.readline()
-         
-        finBloque = numLinea-1 #quita 1 para descontar la línea vacía
-        
-    #Cuenta el nº de líneas totales    
-    with open(nom_archivo, mode='rt') as f:
-        finArchivo = len(f.readlines())
-            
-   """
-    
     #Etiquetas de columnas
     if nom_bloque == 'Devices':
-        nomVars = ['Frame', 'Sub Frame'] + nomColsVar[2:-1] #hay que quitar el último, que es ''
-        #nomVars2=list(filter(lambda c: c!='', nomVars))        
-    
-    else: #para trajectories y Models
-        nomVars=['Frame', 'Sub Frame']        
+        if section == 'EMG':
+            nomVars = ['Frame', 'Sub Frame'] + [v for v in nomColsVar if 'EMG' in v] # quita los que pueda haber de EMG. #hay que quitar el último, que es ''
+            
+            #nomVars2=list(filter(lambda c: c!='', nomVars))        
+        
+        elif section == 'Forces':
+            #Elimina las variables de EMG si las hay
+            nomCols = [v for v in nomCols if v not in ['v', 'sync', 'fs']] # quita los que pueda haber de EMG. #hay que quitar el último, que es ''
+            nomVars=['Frame', 'Sub Frame']
+            for i in range(2,len(nomCols)):
+                if 'x' in nomCols[i]:
+                    #print(nomCols[i], nomColsVar[i])
+                    nomVars.append(nomColsVar[i]+'_' + nomCols[i][-1])#x
+                    nomVars.append(nomColsVar[i]+'_' + nomCols[i+1][-1])#y
+                    nomVars.append(nomColsVar[i]+'_' + nomCols[i+2][-1])#z
+        
+            
+    else: #para Trajectories y Models
+        nomVars=['Frame', 'Sub Frame']            
         for i in range(2,len(nomCols)):
             if nomCols[i] in 'xX' and "'" not in nomCols[i] and "''" not in nomCols[i]:
                 #print(nomCols[i], nomColsVar[i])
@@ -161,27 +176,41 @@ def read_vicon_csv_pl_xr(nom_archivo, nom_bloque='Model Outputs', nom_vars_carga
         nomVars = list(cols)
     
     #Para evitar error si primera línea no son datos, lee la fila de las unidades y luego la quita
-    df = pl.read_csv(nom_archivo, has_header=False, skip_rows=ini_bloque+3, n_rows=fin_bloque-ini_bloque-2, columns=range(len(nomVars)), new_columns=nomVars, separator=separador)
+    df = pl.read_csv(file, has_header=False, skip_rows=ini_bloque+3-offset_blank_ini, n_rows=fin_bloque-ini_bloque-2, columns=range(len(nomVars)), new_columns=nomVars, separator=sep)
     df = df.slice(2, None)
+    
+    if nom_vars_cargar:
+        if coincidence == 'similar':
+            selection = [s for s in nomVars if any(xs in s for xs in nom_vars_cargar)]
+            nomVars = selection
+        elif coincidence == 'exact':
+            selection = nom_vars_cargar
+        df = df.select(pl.col(selection))
+    else:
+        selection = nomVars[2:]
+    
     # df = df.with_columns([
     #                        pl.lit(np.arange(len(df))/frecuencia).alias('time'),
                            
     #                       ]).select(['time'] + nomVars[2:])
     
     
-    if nom_bloque=='Devices':
-        if 'Noraxon Ultium' in nomVars[3]:
-            var = [s.split('- ')[-1] for s in nomVars[2:]] #quita var Frame y Subframe
-        
-        data = df.select(pl.col(nomVars[2:])).to_numpy().T
-        coords={'var' : var,
+    if nom_bloque=='Devices' and section == 'EMG':
+    
+        if 'EMG' in selection[3]:
+            var = [s.split('- ')[-1] for s in selection] #quita var Frame y Subframe
+        else:
+            var = selection
+        data = df.select(pl.col(selection)).to_numpy().T
+        coords={'n_var' : var,
                 'time' : np.arange(df.shape[0]) / frecuencia,                
                 }
         da = xr.DataArray(data=data,
                           dims=coords.keys(),
                           coords=coords,
                          ).astype(float)
-        
+            
+                
     else: #Trajectories y Model Outputs
         #Descompone en ejes
         x = df.select(pl.col('^*_x|_x.$')).to_numpy() #los que acaban en la coordenada o si están repetidos 
@@ -191,17 +220,17 @@ def read_vicon_csv_pl_xr(nom_archivo, nom_bloque='Model Outputs', nom_vars_carga
         data = np.stack([x,y,z])
         coords={'axis' : ['x', 'y', 'z'],
                 'time' : np.arange(data.shape[1]) / frecuencia,
-                'n_var' : [x[:-2] for x in nomVars if '_x' in x or '_X' in x],            
+                'n_var' : [x[:-2] for x in df.columns if '_x' in x or '_X' in x],            
                 }
         da = xr.DataArray(data=data,
                           dims=coords.keys(),
                           coords=coords,
-                         ).astype(float).transpose('n_var', 'axis', 'time')
+                          ).astype(float).transpose('n_var', 'axis', 'time')
     
-    if nom_vars_cargar:
-        da = da.sel(n_var=nom_vars_cargar)
+    # if nom_vars_cargar:
+    #     da = da.sel(n_var=nom_vars_cargar)
         
-    da.name = nom_bloque
+    da.name = section
     da.attrs['frec'] = frecuencia
     da.time.attrs['units'] = 's'
     if da.name=='Trajectories':
@@ -458,7 +487,7 @@ if __name__ == '__main__':
     
     dfDatos = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs')
     dfDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', returnFrec=True)
-    daDatos = read_vicon_csv_pl_xr(nombreArchivo, nom_bloque='Model Outputs')   
+    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs')   
     
     #Sin fila inicial en blanco
     ruta_Archivo = r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconSinHuecos_01_Carrillo_FIN_SinFilaBlancoInicial.csv'
@@ -466,7 +495,7 @@ if __name__ == '__main__':
     
     dfDatos = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs')
     dfDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', returnFrec=True)
-    daDatos = read_vicon_csv_pl_xr(nombreArchivo, nom_bloque='Model Outputs')   
+    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs')   
     
     
     #Solo bloque modelos
@@ -474,8 +503,8 @@ if __name__ == '__main__':
     nombreArchivo = Path(ruta_Archivo)
     dfDatos = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs')
     dfDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', returnFrec=True)
-    daDatos = read_vicon_csv_pl_xr(nombreArchivo, nom_bloque='Model Outputs')
-    daDatos = read_vicon_csv_pl_xr(nombreArchivo, nom_bloque='Trajectories')
+    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs')
+    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Trajectories')
     
     
     #Con hueco muy grande al inicio
@@ -483,7 +512,7 @@ if __name__ == '__main__':
     nombreArchivo = Path(ruta_Archivo)
     dfDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', returnFrec=True)
     dfDatos['R5Meta_z'].plot()
-    daDatos = read_vicon_csv_pl_xr(nombreArchivo, nom_bloque='Trajectories')
+    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Trajectories')
     
     
     #Con formato dataarray de xArray    
@@ -492,7 +521,7 @@ if __name__ == '__main__':
     dfDatos, daDatos1 = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', formatoxArray=True)
     dfDatos['Right_Toe_z'].plot()
     daDatos1.sel(nom_var='Right_Toe', eje='z').plot.line()
-    daDatos = read_vicon_csv_pl_xr(nombreArchivo, nom_bloque='Trajectories')
+    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Trajectories')
     daDatos.sel(n_var='Right_Toe', axis='z').plot.line()
     
     
@@ -520,7 +549,7 @@ if __name__ == '__main__':
     dfDatos.plot(x='time')
     daDatos.sel(eje='x').plot.line(x='time', hue='nom_var')
     
-    daDatos = read_vicon_csv_pl_xr(nombreArchivo, nom_bloque='Trajectories')
+    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Trajectories')
     daDatos.sel(axis='x').plot.line(x='time')
     
     #prueba con encabezado multiindex
@@ -553,8 +582,8 @@ if __name__ == '__main__':
     dfDatosFlat['EMG1'].plot()
     daDatos.sel(nom_var='EMG1').plot(x='time')
     
-    daDatos = read_vicon_csv_pl_xr(nombreArchivo, nom_bloque='Devices')
-    daDatos.sel(var='EMG1').plot(x='time')
+    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='EMG')
+    daDatos.sel(n_var='EMG1').plot(x='time')
     
     #Lectura Modelos con variables modeladas EMG por medio
     ruta_Archivo =r'F:\Investigacion\Proyectos\BikeFitting\Bikefitting\EstudioEMG_MVC\Registros\01_SofiaSanchez\SofiaSanchez\Normal-00.csv'
@@ -563,7 +592,7 @@ if __name__ == '__main__':
     dfDatosMulti['AngBiela'].plot()    
     #En este formato no funciona con xarray
     
-    daDatos = read_vicon_csv_pl_xr(nombreArchivo, nom_bloque='Model Outputs')
+    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs')
     daDatos.sel(n_var='AngBiela').plot.line(x='time')
     
     #Pruebas con Polars
@@ -571,15 +600,37 @@ if __name__ == '__main__':
     
     ruta_Archivo = Path(r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconSinHuecos_01_Carrillo_FIN.csv')
     nombreArchivo = ruta_Archivo
-    daDatos = read_vicon_csv_pl_xr(nombreArchivo, nom_bloque='Model Outputs')
+    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs')
     
-    daDatos = read_vicon_csv_pl_xr(nombreArchivo, nom_bloque='Model Outputs', nom_vars_cargar=['AngArtCuello', 'AngArtL1', 'Right_Pedal', 'vAngBiela'])
+    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs', nom_vars_cargar=['AngArtCuello', 'AngArtL1', 'Right_Pedal', 'vAngBiela'])
+    #daDatos.sel(n_var=['Right_Pedal', 'vAngBiela']).plot.line(x='time', col='n_var', col_wrap=4, hue='axis', aspect=1.2)
+    
+    
+    
+    #Pruebas cuando empieza con primera fila en blanco
+    file = Path(r"F:\Programacion\Python\Mios\TratamientoDatos\pruebaLecturaFilaCero-Nexus-Polars.csv")
+    file = Path(r"F:\Investigacion\Proyectos\Saltos\2023PreactivacionSJ2\DataCollection\S00\S00\New Session\S00_SJ_006.csv")
+    daDatos = read_vicon_csv_pl_xr(file, section='Trajectories')
+    daDatos = read_vicon_csv_pl_xr(file, section='EMG')
+    daDatos = read_vicon_csv_pl_xr(file, section='Forces')
+    
+    
+    #Carga con archivo con EMG y Fuerzas
+    ruta_Archivo = Path(r'F:\Programacion\Python\Mios\SeminarioDoctorado-ProgramacionAnalisisDatos\2021\ArchivosEjemplos\Vicon\ViconTraj-Kistler-EMG.csv')
+    file = ruta_Archivo
+    daDatos = read_vicon_csv_pl_xr(file, section='Trajectories')
+    daDatos = read_vicon_csv_pl_xr(file, section='EMG')
+    daDatos = read_vicon_csv_pl_xr(file, section='Forces')
+    
     
     
     #Compara rapidez con versión Pandas
+    ruta_Archivo = Path(r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconSinHuecos_01_Carrillo_FIN.csv')
+    nombreArchivo = ruta_Archivo
+   
     tme=time.time()
     for x in range(10):
-        daDatos = read_vicon_csv_pl_xr(nombreArchivo, nom_bloque='Model Outputs')
+        daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs')
     print(time.time()-tme)
     
     tme=time.time()
