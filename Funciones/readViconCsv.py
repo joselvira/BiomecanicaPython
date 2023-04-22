@@ -20,13 +20,14 @@ except:
 
 __author__ = 'Jose Luis Lopez Elvira'
 __version__ = 'v.4.0.3'
-__date__ = '19/04/2023'
+__date__ = '22/04/2023'
 
 """
 Modificaciones:
-    19/04/2023, v.4.0.3
-        - En Polars actual (0.17.2) no coindicen los saltos de línea cuando
-          empieza con línea en blanco.
+    22/04/2023, v.4.0.3
+        - Corregido que n Polars actual (0.17.2) no coindicen los saltos de
+          línea cuando empieza con línea en blanco.
+        - Optimizado código de lectura con Polars.
           
     17/04/2023, v.4.0.2
         - Corregido error nombre variable archivo en read_vicon_csv_pl_xr.
@@ -68,8 +69,16 @@ Modificaciones:
     13/12/2020, v2.0.0
         - Con el argumento formatoxArray se puede pedir que devuelva los datos en formato xArray
 """
+def rename_duplicates(names):
+    cols = pd.Series(names)
+    if len(names) != len(cols.unique()):
+        for dup in cols[cols.duplicated()].unique(): 
+            cols[cols[cols == dup].index.values.tolist()] = [dup + '.' + str(i) if i != 0 else dup for i in range(sum(cols == dup))]
+        names = list(cols)
+    return names
 
-def read_vicon_csv_pl_xr(file, section='Model Outputs', nom_vars_cargar=None, coincidence='similar', sep=','):
+
+def read_vicon_csv_pl_xr(file, section='Model Outputs', n_vars_load=None, coincidence='similar', sep=','):
     """
     Parameters
     ----------
@@ -79,7 +88,7 @@ def read_vicon_csv_pl_xr(file, section='Model Outputs', nom_vars_cargar=None, co
         Kind of data variables to load.
         Options: 'Trajectories', 'Model Outputs', 'Forces', 'EMG'
         The default is 'Model Outputs'.
-    nom_vars_cargar : list, optional
+    n_vars_load : list, optional
         DESCRIPTION. The default is None.
     coincidence: string
         When selecting which variables to load, allows strings containing the
@@ -94,149 +103,155 @@ def read_vicon_csv_pl_xr(file, section='Model Outputs', nom_vars_cargar=None, co
 
     """
     if section in ['Forces', 'EMG']:
-        nom_bloque = 'Devices'
+        n_block = 'Devices'
+    elif section == 'Model Outputs EMG':
+        n_block = 'Model Outputs'
     else:
-        nom_bloque = section
+        n_block = section
     
     
-    #Comprueba si hay líneas en blanco. En Polars actual (0.17.2) no coindicen los saltos de línea cuando empieza con línea en blanco
+    #----Check for blank lines. In current Polars (0.17.2) line breaks do not match when starting with blank line
     with open(file, mode='rt') as f:
         offset_blank_ini = 0
         
         while f.readline() in [u'\r\n', u'\n', 'ï»¿\n']:
             offset_blank_ini += 1
-            
+    
+    #----Search section position and length
     with open(file, mode='rt') as f:
         num_lin = 0
         ini_bloque = None
         fin_bloque = None        
                     
-        #Recorre todo el archivo para buscar el inicio y fin del bloque y el nº de líneas
+        #Scrolls through the entire file to find the start and end of the section and the number of lines
         for linea in f:
-            #busca etiqueta del inicio del bloque
-            if ini_bloque is None and nom_bloque in linea:
+            #Search for section start label
+            if ini_bloque is None and n_block in linea:
                 ini_bloque = num_lin
-                #Lo que viene detrás de la etiqueta es la frecuencia
-                frecuencia = int(f.readline().replace(sep,'')) #quita el separador para los casos en los que el archivo ha sido guardado con Excel (completa línea con separador)
+                #After the section label is the frequency
+                freq = int(f.readline().replace(sep,'')) #removes the separator for cases where the file has been saved with Excel (full line with separator)
                 
-                #Carga el nombre de las columnas
-                nomColsVar = str(f.readline()[:-1]).split(sep) #nombreVariables
-                nomCols = str(f.readline()[:-1]).lower().split(sep) #nombre coordenadas X,Y,Z.
+                #Load columns names
+                n_head = str(f.readline()[:-1]).split(sep) #variable names
+                n_subhead = str(f.readline()[:-1]).lower().split(sep) #coordinate names (x,y,z)
                 num_lin+=3
             
-            #Cuando ya ha encontrado el inicio, pasa a buscar el final
+            #When start found, finds the end
             if ini_bloque is not None and fin_bloque is None and linea=='\n':
                 fin_bloque = num_lin-1                
             num_lin+=1            
         fin_archivo = num_lin
         
     if ini_bloque is None:
-        raise Exception('No se ha encontrado el encabezado')
+        raise Exception('Section header not found')
         return
         
-        
-    #Etiquetas de columnas
-    if nom_bloque == 'Devices':
+    
+    #----Assign header labels
+    if n_block == 'Devices':
         if section == 'EMG':
-            nomVars = ['Frame', 'Sub Frame'] + [v for v in nomColsVar if 'EMG' in v] # quita los que pueda haber de EMG. #hay que quitar el último, que es ''
+            n_head = n_head[:len(n_subhead)] #ajusta el número de variables
+            n_vars_merged = rename_duplicates(n_head)
+            selection = [s for s in n_vars_merged[2:] if 'EMG' in s]
+            selection2 = selection
+                        
             
-            #nomVars2=list(filter(lambda c: c!='', nomVars))        
-        
         elif section == 'Forces':
-            #Elimina las variables de EMG si las hay
-            nomCols = [v for v in nomCols if v not in ['v', 'sync', 'fs']] # quita los que pueda haber de EMG. #hay que quitar el último, que es ''
-            nomVars=['Frame', 'Sub Frame']
-            for i in range(2,len(nomCols)):
-                if 'x' in nomCols[i]:
-                    #print(nomCols[i], nomColsVar[i])
-                    nomVars.append(nomColsVar[i]+'_' + nomCols[i][-1])#x
-                    nomVars.append(nomColsVar[i]+'_' + nomCols[i+1][-1])#y
-                    nomVars.append(nomColsVar[i]+'_' + nomCols[i+2][-1])#z
-        
+            n_vars_merged = [h+'_'+sh for h,sh in zip(n_head, n_subhead)]
+            n_vars_merged = rename_duplicates(n_vars_merged)
+            selection = [s for s in n_vars_merged[2:] if 'EMG' not in s]
+            selection2 = []
+            for i in range(2,len(n_subhead)):
+                if 'x' in n_subhead[i] and 'EMG' not in n_subhead[i]:
+                    #print(n_subhead[i], n_head[i])
+                    selection2.append(n_head[i]+'_' + n_subhead[i][-1])#x
+                    selection2.append(n_head[i]+'_' + n_subhead[i+1][-1])#y
+                    selection2.append(n_head[i]+'_' + n_subhead[i+2][-1])#z
+                    
             
-    else: #para Trajectories y Models
-        nomVars=['Frame', 'Sub Frame']            
-        for i in range(2,len(nomCols)):
-            if nomCols[i] in 'xX' and "'" not in nomCols[i] and "''" not in nomCols[i]:
-                #print(nomCols[i], nomColsVar[i])
-                nomVars.append(nomColsVar[i].split(':')[1]+'_' + nomCols[i])#X
-                nomVars.append(nomColsVar[i].split(':')[1]+'_' + nomCols[i+1])#Y
-                nomVars.append(nomColsVar[i].split(':')[1]+'_' + nomCols[i+2])#Z
-            elif 'EMG' in nomCols[i]:
-                 #print(nomCols[i], nomColsVar[i])
-                 nomVars.append(nomColsVar[i].split(':')[1]+'_' + nomCols[i])
-            #else:
-                #print(nomCols[i])
-    
-    #Comprueba si hay encabezados repetidos
-    cols = pd.Series(nomVars)
-    if len(nomVars) != len(cols.unique()):
-        for dup in cols[cols.duplicated()].unique(): 
-            cols[cols[cols == dup].index.values.tolist()] = [dup + '.' + str(i) if i != 0 else dup for i in range(sum(cols == dup))]
-        nomVars = list(cols)
-    
-    #Para evitar error si primera línea no son datos, lee la fila de las unidades y luego la quita
-    df = pl.read_csv(file, has_header=False, skip_rows=ini_bloque+3-offset_blank_ini, n_rows=fin_bloque-ini_bloque-2, columns=range(len(nomVars)), new_columns=nomVars, separator=sep)
-    df = df.slice(2, None)
-    
-    if nom_vars_cargar:
-        if coincidence == 'similar':
-            selection = [s for s in nomVars if any(xs in s for xs in nom_vars_cargar)]
-            nomVars = selection
-        elif coincidence == 'exact':
-            selection = nom_vars_cargar
-        df = df.select(pl.col(selection))
-    else:
-        selection = nomVars[2:]
-    
-    # df = df.with_columns([
-    #                        pl.lit(np.arange(len(df))/frecuencia).alias('time'),
-                           
-    #                       ]).select(['time'] + nomVars[2:])
-    
-    
-    if nom_bloque=='Devices' and section == 'EMG':
-    
-        if 'EMG' in selection[3]:
-            var = [s.split('- ')[-1] for s in selection] #quita var Frame y Subframe
+    elif n_block in ['Trajectories', 'Model Outputs', 'Model Outputs EMG']:
+        n_vars_merged = ['Frame', 'Sub Frame']            
+        for i in range(2,len(n_subhead)):
+            if n_subhead[i] in 'xX' and "'" not in n_subhead[i] and "''" not in n_subhead[i]:
+                #print(n_subhead[i], n_head[i])
+                n_vars_merged.append(n_head[i].split(':')[1]+'_' + n_subhead[i])#X
+                n_vars_merged.append(n_head[i].split(':')[1]+'_' + n_subhead[i+1])#Y
+                n_vars_merged.append(n_head[i].split(':')[1]+'_' + n_subhead[i+2])#Z
+            elif 'emg' in n_subhead[i]:
+                 #print(n_subhead[i], n_head[i])
+                 n_vars_merged.append(n_head[i].split(':')[1]+'_' + n_subhead[i])
+        selection = set(n_vars_merged[2:]) #remove duplicates
+        if section == 'Model Outputs EMG':
+            selection = sorted([s for s in selection if '_emg' in s])
+            selection2 = [s[:-4] for s in selection]
         else:
-            var = selection
-        data = df.select(pl.col(selection)).to_numpy().T
-        coords={'n_var' : var,
-                'time' : np.arange(df.shape[0]) / frecuencia,                
+            selection = sorted([s for s in selection if '_emg' not in s])
+            selection2 = selection
+        n_vars_merged = rename_duplicates(n_vars_merged)
+    
+    #----Load data from file
+    df = (pl.read_csv(file, has_header=False, skip_rows=ini_bloque+3-offset_blank_ini,
+                 n_rows=fin_bloque-ini_bloque-2,
+                 columns=range(len(n_vars_merged)),
+                 new_columns=n_vars_merged, separator=sep)
+         .select(pl.col(selection))
+         .rename(dict(zip(selection, selection2)))
+         .slice(2, None) #remove subhead and units rows
+        )
+    
+    #----Filter variables
+    if n_vars_load:
+        if not isinstance(n_vars_load, list):
+            n_vars_load = [n_vars_load] #in case a string is passed
+        if coincidence == 'similar':
+            selection2 = [s for s in selection2 if any(xs in s for xs in n_vars_load)]
+        elif coincidence == 'exact':
+            selection2 = n_vars_load
+        df = df.select(pl.col(selection2))
+        
+    
+    #----Transform polars to xarray
+    if section in ['EMG', 'Model Outputs EMG']:
+        data = df.to_numpy().T
+        coords={'n_var' : selection2,
+                'time' : np.arange(df.shape[0]) / freq,                
                 }
         da = xr.DataArray(data=data,
                           dims=coords.keys(),
                           coords=coords,
                          ).astype(float)
-            
-                
-    else: #Trajectories y Model Outputs
-        #Descompone en ejes
+    
+    
+    elif section in ['Trajectories', 'Model Outputs', 'Forces']:
+        #Decompose on its axes
         x = df.select(pl.col('^*_x|_x.$')).to_numpy() #los que acaban en la coordenada o si están repetidos 
         y = df.select(pl.col('^*_y|_y.$')).to_numpy()
-        z = df.select(pl.col('^*_z|_z.*$')).to_numpy()
-        
+        z = df.select(pl.col('^*_z|_z.*$')).to_numpy()        
         data = np.stack([x,y,z])
+                
         coords={'axis' : ['x', 'y', 'z'],
-                'time' : np.arange(data.shape[1]) / frecuencia,
+                'time' : np.arange(data.shape[1]) / freq,
                 'n_var' : [x[:-2] for x in df.columns if '_x' in x or '_X' in x],            
                 }
-        da = xr.DataArray(data=data,
+        da = (xr.DataArray(data=data,
                           dims=coords.keys(),
                           coords=coords,
-                          ).astype(float).transpose('n_var', 'axis', 'time')
-    
-    # if nom_vars_cargar:
-    #     da = da.sel(n_var=nom_vars_cargar)
+                          )
+             .astype(float)
+             .transpose('n_var', 'axis', 'time')
+             )
         
     da.name = section
-    da.attrs['frec'] = frecuencia
+    da.attrs['frec'] = freq
     da.time.attrs['units'] = 's'
-    if da.name=='Trajectories':
+    if section == 'Trajectories':
         da.attrs['units'] = 'mm'
-    
+    elif 'EMG' in section:
+        da.attrs['units'] = 'mV'
+
     return da
+
+
     
     
 def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', returnFrec=False, formatoxArray=False, header_format='flat'):
@@ -308,7 +323,7 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
         #busca etiqueta del final del bloque
         while linea!='\n':
             if linea == '':         
-                raise Exception('No se ha encontrado el final del bloque')
+                raise Exception('End of section not found')
                 
             numLinea+=1
             #print('Linea '+ str(numLinea))
@@ -513,6 +528,7 @@ if __name__ == '__main__':
     dfDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', returnFrec=True)
     dfDatos['R5Meta_z'].plot()
     daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Trajectories')
+    daDatos.sel(n_var='R5Meta', axis='z').plot.line(x='time')
     
     
     #Con formato dataarray de xArray    
@@ -583,26 +599,32 @@ if __name__ == '__main__':
     daDatos.sel(nom_var='EMG1').plot(x='time')
     
     daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='EMG')
-    daDatos.sel(n_var='EMG1').plot(x='time')
+    daDatos.sel(n_var=daDatos.n_var.str.endswith('EMG1')).plot(x='time')
     
     #Lectura Modelos con variables modeladas EMG por medio
     ruta_Archivo =r'F:\Investigacion\Proyectos\BikeFitting\Bikefitting\EstudioEMG_MVC\Registros\01_SofiaSanchez\SofiaSanchez\Normal-00.csv'
     nombreArchivo = Path(ruta_Archivo)
     dfDatosMulti, frec = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', header_format='multi', returnFrec=True)
     dfDatosMulti['AngBiela'].plot()    
+    dfDatos, frec = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', returnFrec=True)
     #En este formato no funciona con xarray
     
+    #Modelados no EMG
     daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs')
     daDatos.sel(n_var='AngBiela').plot.line(x='time')
+    #Modelados EMG
+    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs EMG')
+    daDatos.plot.line(x='time')
+    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs EMG', n_vars_load=['BIC'])
     
     #Pruebas con Polars
     import time
     
     ruta_Archivo = Path(r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconSinHuecos_01_Carrillo_FIN.csv')
-    nombreArchivo = ruta_Archivo
-    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs')
+    file = ruta_Archivo
+    daDatos = read_vicon_csv_pl_xr(file, section='Model Outputs')
     
-    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs', nom_vars_cargar=['AngArtCuello', 'AngArtL1', 'Right_Pedal', 'vAngBiela'])
+    daDatos = read_vicon_csv_pl_xr(file, section='Model Outputs', n_vars_load=['AngArtCuello', 'AngArtL1', 'Right_Pedal', 'vAngBiela'])
     #daDatos.sel(n_var=['Right_Pedal', 'vAngBiela']).plot.line(x='time', col='n_var', col_wrap=4, hue='axis', aspect=1.2)
     
     
