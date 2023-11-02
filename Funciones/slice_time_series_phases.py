@@ -296,7 +296,7 @@ if __name__ == '__main__':
     
     #np.random.seed(123) #fija la aleatoriedad para asegurarse la reproducibilidad
     
-    def create_time_seties(num_suj=10, Fs=100.0, IDini=0, rango_offset = [-2.0, -0.5], rango_amp = [1.0, 2.2], rango_frec = [1.8, 2.4], rango_af=[0.0, 1.0], rango_duracion=[5.0, 5.1], amplific_ruido=[0.4, 0.7], fc_ruido=[7.0, 12.0]):
+    def create_time_series(num_suj=10, Fs=100.0, IDini=0, rango_offset = [-2.0, -0.5], rango_amp = [1.0, 2.2], rango_frec = [1.8, 2.4], rango_af=[0.0, 1.0], rango_duracion=[5.0, 5.1], amplific_ruido=[0.4, 0.7], fc_ruido=[7.0, 12.0]):
         sujeto=[]
         for suj in range(num_suj):            
             a = np.random.uniform(rango_amp[0], rango_amp[1])
@@ -329,12 +329,12 @@ if __name__ == '__main__':
     n=10
     duracion=10
     frec=200.0
-    Pre_v1 = create_time_seties(n, Fs=frec, IDini=0, rango_offset = [25, 29], rango_amp = [40, 45], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'pre', 'nom_var':'a'})
-    Post_v1 = create_time_seties(n, Fs=frec, IDini=0, rango_offset = [22, 26], rango_amp = [36, 40], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'post', 'nom_var':'a'})
-    Pre_v2 = create_time_seties(n, Fs=frec, IDini=0, rango_offset = [35, 39], rango_amp = [50, 55], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'pre', 'nom_var':'b'})
-    Post_v2 = create_time_seties(n, Fs=frec, IDini=0, rango_offset = [32, 36], rango_amp = [32, 45], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'post', 'nom_var':'b'})
-    Pre_v3 = create_time_seties(n, Fs=frec, IDini=0, rango_offset = [35, 39], rango_amp = [10, 15], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'pre', 'nom_var':'c'})
-    Post_v3 = create_time_seties(n, Fs=frec, IDini=0, rango_offset = [32, 36], rango_amp = [12, 16], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'post', 'nom_var':'c'})
+    Pre_v1 = create_time_series(n, Fs=frec, IDini=0, rango_offset = [25, 29], rango_amp = [40, 45], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'pre', 'nom_var':'a'})
+    Post_v1 = create_time_series(n, Fs=frec, IDini=0, rango_offset = [22, 26], rango_amp = [36, 40], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'post', 'nom_var':'a'})
+    Pre_v2 = create_time_series(n, Fs=frec, IDini=0, rango_offset = [35, 39], rango_amp = [50, 55], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'pre', 'nom_var':'b'})
+    Post_v2 = create_time_series(n, Fs=frec, IDini=0, rango_offset = [32, 36], rango_amp = [32, 45], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'post', 'nom_var':'b'})
+    Pre_v3 = create_time_series(n, Fs=frec, IDini=0, rango_offset = [35, 39], rango_amp = [10, 15], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'pre', 'nom_var':'c'})
+    Post_v3 = create_time_series(n, Fs=frec, IDini=0, rango_offset = [32, 36], rango_amp = [12, 16], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'post', 'nom_var':'c'})
     
     dfTodosArchivos = pd.concat([Pre_v1, Post_v1, Pre_v2, Post_v2, Pre_v3, Post_v3]).reset_index()
     dfTodosArchivos = dfTodosArchivos[['ID', 'tiempo', 'nom_var', 'time', 'value']] #Reordena los factores
@@ -342,7 +342,7 @@ if __name__ == '__main__':
     #Lo pasa a DataArray
     daTodos = dfTodosArchivos.set_index(['ID', 'tiempo', 'nom_var', 'time']).to_xarray().to_array().squeeze('variable').drop_vars('variable')
     daTodos.attrs['frec'] = 1/(daTodos.time[1].values - daTodos.time[0].values)#incluimos la frecuencia como atributo
-    daTodos.attrs['units'] = 'grados'
+    daTodos.attrs['units'] = 'deg'
     daTodos.time.attrs['units'] = 's'
         
     #sns.relplot(data=dfTodosArchivos, x='time', y='value',  col='tiempo', row='nom_var', units='ID', estimator=None, hue='ID',  kind='line')
@@ -356,7 +356,6 @@ if __name__ == '__main__':
     sys.path.insert(1, r'F:\Programacion\Python\Mios\Functions')  # add to pythonpath
     from slice_time_series_phases import SliceTimeSeriesPhases as stsp
     """
-    
     from detecta import detect_peaks
     #Pasando por la clase
     da = SliceTimeSeriesPhases(data=daTodos, func_events=detect_peaks)

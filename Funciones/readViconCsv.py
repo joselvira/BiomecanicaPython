@@ -19,11 +19,14 @@ except:
 #import scipy.signal
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.4.0.3'
-__date__ = '22/04/2023'
+__version__ = 'v.4.0.4'
+__date__ = '07/05/2023'
 
 """
 Modificaciones:
+    07/05/2023, v.4.0.4
+        - Mejorada lectura con polars
+    
     22/04/2023, v.4.0.3
         - Corregido que n Polars actual (0.17.2) no coindicen los saltos de
           línea cuando empieza con línea en blanco.
@@ -69,6 +72,213 @@ Modificaciones:
     13/12/2020, v2.0.0
         - Con el argumento formatoxArray se puede pedir que devuelva los datos en formato xArray
 """
+
+def read_vicon_csv_pl_xr(file, section='Model Outputs', n_vars_load=None, coincidence='similar', sep=','):
+    """
+    Parameters
+    ----------
+    file : string or path of the file
+        DESCRIPTION.
+    section : string, optional
+        Kind of data variables to load.
+        Options: 'Trajectories', 'Model Outputs', 'Forces', 'EMG'
+        The default is 'Model Outputs'.
+    n_vars_load : list, optional
+        DESCRIPTION. The default is None.
+    coincidence: string
+        When selecting which variables to load, allows strings containing the
+        indicated or forces to be exact.
+        Options: 'similar', 'exact'. The default is 'similar'.
+    sep : string, optional
+        Separator used in the csv file. The default is ','.
+
+    Returns
+    -------
+    Xarray DataArray.
+
+    """
+    if section in ['Forces', 'EMG']:
+        n_block = 'Devices'
+    elif section == 'Model Outputs EMG':
+        n_block = 'Model Outputs'
+    else:
+        n_block = section
+    
+    #Ensures that file is a csv file
+    file = file.with_suffix('.csv')
+
+    #----Check for blank lines. In current Polars (0.17.2) line breaks do not match when starting with blank line
+    with open(file, mode='rt') as f:
+        offset_blank_ini = 0
+        
+        while f.readline() in [u'\r\n', u'\n', 'ï»¿\n']:
+            offset_blank_ini += 1
+    
+    #----Search section position and length
+    with open(file, mode='rt') as f:
+        num_lin = 0
+        ini_bloque = None
+        fin_bloque = None        
+                    
+        #Scrolls through the entire file to find the start and end of the section and the number of lines
+        for linea in f:
+            #Search for section start label
+            if ini_bloque is None and n_block in linea:
+                ini_bloque = num_lin
+                #The frequency is below the section label
+                freq = int(f.readline().replace(sep,'')) #removes the separator for cases where the file has been saved with Excel (full line with separator)
+                
+                # #Load columns names
+                # n_head = str(f.readline()[:-1]).split(sep) #variable names
+                # n_subhead = str(f.readline()[:-1]).lower().split(sep) #coordinate names (x,y,z)
+                # num_lin+=3
+                num_lin+=1
+            #When start found, search the end
+            if ini_bloque is not None and fin_bloque is None and linea=='\n':
+                fin_bloque = num_lin-1
+                break
+        
+            num_lin+=1            
+        # fin_archivo = num_lin
+        
+    if ini_bloque is None:
+        raise Exception('Section header not found')
+        return
+        
+    
+    #----Load data from file
+    pl.read_csv(file, truncate_ragged_lines=True)
+    df = pl.read_csv(file, has_header=True, skip_rows=ini_bloque+2-offset_blank_ini,
+                     n_rows=fin_bloque-ini_bloque-2,
+                     truncate_ragged_lines=True
+                     #columns=range(len(n_vars_merged)),
+                     #new_columns=n_vars_merged, separator=sep
+                     )
+    n_head = df.columns
+    n_subhead = list(np.char.lower(df.slice(0,1).to_numpy()[0].astype(str)))
+    
+    #TODO: SIPLIFY WITH skip_rows_after_header=1?
+    #Remove subhead and units rows
+    df = df.slice(2, None)
+    
+    if n_block in ['Trajectories', 'Model Outputs', 'Model Outputs EMG']:
+        n_vars_merged = ['Frame', 'Sub Frame']            
+        for i in range(2,len(n_subhead)):
+            if n_subhead[i] in 'x' and "'" not in n_subhead[i] and "''" not in n_subhead[i]:
+                #print(n_subhead[i], n_head[i])
+                n_vars_merged.append(n_head[i].split(':')[1]+'_' + n_subhead[i])#X
+                n_vars_merged.append(n_head[i].split(':')[1]+'_' + n_subhead[i+1])#Y
+                n_vars_merged.append(n_head[i].split(':')[1]+'_' + n_subhead[i+2])#Z
+            elif 'emg' in n_subhead[i]:
+                 #print(n_subhead[i], n_head[i])
+                 n_vars_merged.append(n_head[i].split(':')[1]+'_' + n_subhead[i])
+        
+        #Rename headers
+        df = df.rename(dict(zip(n_head, n_vars_merged)))
+        
+        if section == 'Model Outputs EMG':
+            df = df.select(pl.col('^*_emg.*$'))
+            df = (df.rename(dict(zip(df.columns, [n[:-3] for n in df.columns])))
+                  .select(pl.exclude('^*_duplicate.*$')) #remove duplicates
+                  #.slice(2, None) #remove subhead and units rows
+                  )
+        else: #Trajectories and Model Outputs
+            df = (df.select(pl.exclude(['Frame', 'Sub Frame']))
+                    .select(pl.exclude('^*_duplicate.*$')) #remove duplicates
+                    .select(pl.exclude('^*_emg.*$')) #remove 1D EMG variables
+                    #.slice(2, None) #remove subhead and units rows
+                  )
+    
+    elif n_block == 'Devices':
+        if section == 'EMG':
+            # n_head = n_head[:len(n_subhead)] #ajusta el número de variables
+            # n_vars_merged = rename_duplicates(n_head)
+            # selection = [s for s in n_vars_merged[2:] if 'EMG' in s]
+            # selection2 = selection
+           
+            df = (df.select(pl.col('^*EMG.*$'))                      
+                    .select(pl.exclude('^*_duplicate.*$')) #remove duplicates                    
+                    #.slice(2, None) #remove subhead and units rows
+                  )
+                        
+            
+        elif section == 'Forces':
+            n_vars_merged = ['Frame', 'Sub Frame']            
+            for i in range(2,len(n_subhead)):
+                if 'x' in n_subhead[i] and "'" not in n_subhead[i] and "''" not in n_subhead[i]:
+                    #print(n_subhead[i], n_head[i])
+                    n_vars_merged.append(n_head[i] + '_' + n_subhead[i])#X
+                    n_vars_merged.append(n_head[i] + '_' + n_subhead[i+1])#Y
+                    n_vars_merged.append(n_head[i] + '_' + n_subhead[i+2])#Z
+                elif 'v' in n_subhead[i]:
+                    n_vars_merged.append(n_head[i] + '_' + n_subhead[i])
+                    
+            df = (df.rename(dict(zip(df.columns, n_vars_merged)))
+                      .select(pl.exclude('^*EMG.*$'))                      
+                      .select(pl.exclude('^*_duplicate.*$')) #remove duplicates                    
+                    #.slice(2, None) #remove subhead and units rows
+                  )
+            
+                       
+    #----Filter variables
+    if n_vars_load is not None:
+        if not isinstance(n_vars_load, list):
+            n_vars_load = [n_vars_load] #in case a string is passed
+        if coincidence == 'similar':
+            selection = [s for s in df.columns if any(xs in s for xs in n_vars_load)]
+        elif coincidence == 'exact':
+            selection = n_vars_load
+        df = df.select(pl.col(selection))
+    
+        
+    
+    #----Transform polars to xarray
+    if section in ['Trajectories', 'Model Outputs', 'Forces']:
+        #Decompose on its axes
+        x = df.select(pl.col('^*x$')).to_numpy() #los que acaban en la coordenada o si están repetidos 
+        y = df.select(pl.col('^*y$')).to_numpy()
+        z = df.select(pl.col('^*z$')).to_numpy()        
+        data = np.stack([x,y,z])
+        
+        ending = -3 if section == 'Forces' else -2
+        coords={'axis' : ['x', 'y', 'z'],
+                'time' : np.arange(data.shape[1]) / freq,
+                'n_var' : [x[:ending] for x in df.columns if 'x' in x[-1]],
+                }
+        da = (xr.DataArray(data=data,
+                          dims=coords.keys(),
+                          coords=coords,
+                          )
+             .astype(float)
+             .transpose('n_var', 'axis', 'time')
+             )
+    
+    elif section in ['EMG', 'Model Outputs EMG']:
+        data = df.to_numpy().T
+        coords={'n_var' : df.columns,#selection2,
+                'time' : np.arange(df.shape[0]) / freq,                
+                }
+        da = xr.DataArray(data=data,
+                          dims=coords.keys(),
+                          coords=coords,
+                         ).astype(float)
+    
+    
+    da.name = section
+    da.attrs['freq'] = freq
+    da.time.attrs['units'] = 's'
+    if section == 'Trajectories':
+        da.attrs['units'] = 'mm'
+    elif 'EMG' in section:
+        da.attrs['units'] = 'V'
+    elif 'Forces' in section:
+        da.attrs['units'] = 'N'
+    return da
+
+
+
+
+
 def rename_duplicates(names):
     cols = pd.Series(names)
     if len(names) != len(cols.unique()):
@@ -78,7 +288,7 @@ def rename_duplicates(names):
     return names
 
 
-def read_vicon_csv_pl_xr(file, section='Model Outputs', n_vars_load=None, coincidence='similar', sep=','):
+def read_vicon_csv_pl_xr2(file, section='Model Outputs', n_vars_load=None, coincidence='similar', sep=','):
     """
     Parameters
     ----------
@@ -136,7 +346,7 @@ def read_vicon_csv_pl_xr(file, section='Model Outputs', n_vars_load=None, coinci
                 n_subhead = str(f.readline()[:-1]).lower().split(sep) #coordinate names (x,y,z)
                 num_lin+=3
             
-            #When start found, finds the end
+            #When start found, search the end
             if ini_bloque is not None and fin_bloque is None and linea=='\n':
                 fin_bloque = num_lin-1                
             num_lin+=1            
@@ -189,7 +399,7 @@ def read_vicon_csv_pl_xr(file, section='Model Outputs', n_vars_load=None, coinci
             selection2 = selection
         n_vars_merged = rename_duplicates(n_vars_merged)
     
-    #----Load data from file
+    #----Load data from file            
     df = (pl.read_csv(file, has_header=False, skip_rows=ini_bloque+3-offset_blank_ini,
                  n_rows=fin_bloque-ini_bloque-2,
                  columns=range(len(n_vars_merged)),
@@ -242,18 +452,17 @@ def read_vicon_csv_pl_xr(file, section='Model Outputs', n_vars_load=None, coinci
              )
         
     da.name = section
-    da.attrs['frec'] = freq
+    da.attrs['freq'] = freq
     da.time.attrs['units'] = 's'
     if section == 'Trajectories':
         da.attrs['units'] = 'mm'
     elif 'EMG' in section:
-        da.attrs['units'] = 'mV'
-
+        da.attrs['units'] = 'V'
+    elif 'Forces' in section:
+        da.attrs['units'] = 'N'
     return da
 
-
-    
-    
+   
 def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', returnFrec=False, formatoxArray=False, header_format='flat'):
     """    
     Parameters
@@ -612,13 +821,16 @@ if __name__ == '__main__':
     #Modelados no EMG
     daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs')
     daDatos.sel(n_var='AngBiela').plot.line(x='time')
+    
+    daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs', n_vars_load=['AngArtAnkle_L', 'AngArtAnkle_R'])
+    daDatos.plot.line(x='time', col='n_var')
+    
     #Modelados EMG
     daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs EMG')
     daDatos.plot.line(x='time')
     daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Model Outputs EMG', n_vars_load=['BIC'])
     
     #Pruebas con Polars
-    import time
     
     ruta_Archivo = Path(r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconSinHuecos_01_Carrillo_FIN.csv')
     file = ruta_Archivo
@@ -647,6 +859,8 @@ if __name__ == '__main__':
     
     
     #Compara rapidez con versión Pandas
+    import time
+    
     ruta_Archivo = Path(r'F:\Programacion\Python\Mios\TratamientoDatos\EjemploViconSinHuecos_01_Carrillo_FIN.csv')
     nombreArchivo = ruta_Archivo
    
