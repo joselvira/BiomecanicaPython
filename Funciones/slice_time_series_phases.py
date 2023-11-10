@@ -16,12 +16,15 @@ import matplotlib.pyplot as plt
 
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.3.1.1'
-__date__ = '11/03/2023'
+__version__ = 'v.3.1.2'
+__date__ = '10/11/2023'
 
 
 """
 Modificaciones:
+    10/11/2023, v3.1.2
+    - Ahora mantiene las unidades en el dataframe cortado.
+    
     11/03/2023, v3.1.1
     - Solucionado error con función find_peaks_aux. Hace copia antes de buscar
       cortes.
@@ -70,7 +73,7 @@ Modificaciones:
 
 class SliceTimeSeriesPhases():
     def __init__(self, data: Optional[xr.DataArray]=xr.DataArray(),
-                 frec: Optional[float]=None,
+                 freq: Optional[float]=None,
                  n_dim_time: Optional[str]='time',
                  reference_var: Optional[Union[str, dict]]=None,
                  discard_phases_ini: int=0,
@@ -92,10 +95,10 @@ class SliceTimeSeriesPhases():
         self.max_phases = max_phases
         self.kwargs_func_events = kwargs_func_events
         
-        if frec==None and not data.isnull().all():
-            self.frec = (np.round(1/(self.data[self.n_dim_time][1] - self.data[self.n_dim_time][0]),1)).data
+        if freq==None and not data.isnull().all():
+            self.freq = (np.round(1/(self.data[self.n_dim_time][1] - self.data[self.n_dim_time][0]),1)).data
         else:
-            self.frec = frec
+            self.freq = freq
         
     
     def detect_events(self) -> xr.DataArray:
@@ -191,11 +194,12 @@ class SliceTimeSeriesPhases():
                           #kwargs=args_func_events,
                           )
         da = (da.assign_coords(n_event=range(len(da.n_event)))
-              .assign_coords(time=np.arange(0, len(da.time)) / self.frec)
+              .assign_coords(time=np.arange(0, len(da.time)) / self.freq)
               .dropna(dim='n_event', how='all').dropna(dim=self.n_dim_time, how='all')
               .rename({'n_event':'phase'})
               )
         da.attrs= self.data.attrs
+        da.time.attrs['units'] = self.data.time.attrs['units']
         
         return da
     
@@ -293,12 +297,13 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import seaborn as sns
     
-    
-    #np.random.seed(123) #fija la aleatoriedad para asegurarse la reproducibilidad
-    
-    def create_time_series(num_suj=10, Fs=100.0, IDini=0, rango_offset = [-2.0, -0.5], rango_amp = [1.0, 2.2], rango_frec = [1.8, 2.4], rango_af=[0.0, 1.0], rango_duracion=[5.0, 5.1], amplific_ruido=[0.4, 0.7], fc_ruido=[7.0, 12.0]):
-        sujeto=[]
-        for suj in range(num_suj):            
+
+    def create_time_series_xr(rnd_seed=None, num_subj=10, Fs=100.0, IDini=0, rango_offset = [-2.0, -0.5], rango_amp = [1.0, 2.2], rango_frec = [1.8, 2.4], rango_af=[0.0, 1.0], rango_duracion=[5.0, 5.1], amplific_ruido=[0.4, 0.7], fc_ruido=[7.0, 12.0]):
+        if rnd_seed is not None:
+            np.random.seed(rnd_seed) # para mantener la consistencia al crear los datos aleatorios
+        subjects = []
+        for subj in range(num_subj):
+            #print(subj)
             a = np.random.uniform(rango_amp[0], rango_amp[1])
             of = np.random.uniform(rango_offset[0], rango_offset[1])
             f =  np.random.uniform(rango_frec[0], rango_frec[1])
