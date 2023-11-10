@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+#%% -*- coding: utf-8 -*-
 """
 Created on Thu Sep 30 18:01:08 2021
 
@@ -289,7 +289,7 @@ if __name__ == '__main__':
 
            
     import numpy as np
-    import pandas as pd
+    #import pandas as pd
     import xarray as xr
     from scipy.signal import butter, filtfilt
     from pathlib import Path
@@ -314,7 +314,7 @@ if __name__ == '__main__':
             
             Ts = 1./Fs #intervalo de tiempo entre datos en segundos
             t = np.arange(0, duracion, Ts)
-    
+
             senal = np.array(of + a*np.sin(2*np.pi*f*t + af))
             
             #Crea un ruido aleatorio controlado
@@ -327,31 +327,66 @@ if __name__ == '__main__':
             
             
             #################################
-            sujeto.append(pd.DataFrame(senal + ruido, columns=['value']).assign(**{'ID':'{0:02d}'.format(suj+IDini), 'time':np.arange(0, len(senal)/Fs, 1/Fs)}))
-        return pd.concat(sujeto)
-    
-    np.random.seed(12340) #fija la aleatoriedad para asegurarse la reproducibilidad
+            subjects.append(senal + ruido)
+            #subjects.append(np.expand_dims(senal + ruido, axis=0))
+            #sujeto.append(pd.DataFrame(senal + ruido, columns=['value']).assign(**{'ID':'{0:02d}'.format(subj+IDini), 'time':np.arange(0, len(senal)/Fs, 1/Fs)}))
+        
+        #Pad data to last the same
+        import itertools
+        data = np.array(list(itertools.zip_longest(*subjects, fillvalue=np.nan)))
+
+        data = xr.DataArray(data=data,
+                    coords={'time':np.arange(data.shape[0])/Fs,
+                            'ID':[f'{i:0>2}' for i in range(num_subj)], #rellena ceros a la izq. f'{i:0>2}' vale para int y str, f'{i:02}' vale solo para int                            
+                            }
+                    )
+        return data
+
+    rnd_seed = np.random.seed(12340) #fija la aleatoriedad para asegurarse la reproducibilidad
     n=10
-    duracion=10
-    frec=200.0
-    Pre_v1 = create_time_series(n, Fs=frec, IDini=0, rango_offset = [25, 29], rango_amp = [40, 45], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'pre', 'nom_var':'a'})
-    Post_v1 = create_time_series(n, Fs=frec, IDini=0, rango_offset = [22, 26], rango_amp = [36, 40], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'post', 'nom_var':'a'})
-    Pre_v2 = create_time_series(n, Fs=frec, IDini=0, rango_offset = [35, 39], rango_amp = [50, 55], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'pre', 'nom_var':'b'})
-    Post_v2 = create_time_series(n, Fs=frec, IDini=0, rango_offset = [32, 36], rango_amp = [32, 45], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'post', 'nom_var':'b'})
-    Pre_v3 = create_time_series(n, Fs=frec, IDini=0, rango_offset = [35, 39], rango_amp = [10, 15], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'pre', 'nom_var':'c'})
-    Post_v3 = create_time_series(n, Fs=frec, IDini=0, rango_offset = [32, 36], rango_amp = [12, 16], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion]).assign(**{'tiempo':'post', 'nom_var':'c'})
-    
-    dfTodosArchivos = pd.concat([Pre_v1, Post_v1, Pre_v2, Post_v2, Pre_v3, Post_v3]).reset_index()
-    dfTodosArchivos = dfTodosArchivos[['ID', 'tiempo', 'nom_var', 'time', 'value']] #Reordena los factores
-    
-    #Lo pasa a DataArray
-    daTodos = dfTodosArchivos.set_index(['ID', 'tiempo', 'nom_var', 'time']).to_xarray().to_array().squeeze('variable').drop_vars('variable')
-    daTodos.attrs['frec'] = 1/(daTodos.time[1].values - daTodos.time[0].values)#incluimos la frecuencia como atributo
+    duracion=15
+    freq=200.0
+    Pre_a = (create_time_series_xr(rnd_seed=rnd_seed, num_subj=n, Fs=freq, IDini=0, rango_offset = [25, 29], rango_amp = [40, 45], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion])
+                .expand_dims({'n_var':['a'], 'momento':['pre']})
+                .transpose('ID', 'momento', 'n_var', 'time')              
+                )
+    Post_a = (create_time_series_xr(rnd_seed=rnd_seed, num_subj=n, Fs=freq, IDini=0, rango_offset = [22, 26], rango_amp = [36, 40], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion])
+                .expand_dims({'n_var':['a'], 'momento':['post']}) 
+                .transpose('ID', 'momento', 'n_var', 'time')
+                )
+    var_a= xr.concat([Pre_a, Post_a], dim='momento')
+
+    Pre_b = (create_time_series_xr(rnd_seed=rnd_seed, num_subj=n, Fs=freq, IDini=0, rango_offset = [35, 39], rango_amp = [50, 55], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion])
+                .expand_dims({'n_var':['b'], 'momento':['pre']})
+                .transpose('ID', 'momento', 'n_var', 'time')
+                )
+    Post_b = (create_time_series_xr(rnd_seed=rnd_seed, num_subj=n, Fs=freq, IDini=0, rango_offset = [32, 36], rango_amp = [32, 45], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion])
+                .expand_dims({'n_var':['b'], 'momento':['post']})
+                .transpose('ID', 'momento', 'n_var', 'time')
+                )
+    var_b= xr.concat([Pre_b, Post_b], dim='momento')
+
+    Pre_c = (create_time_series_xr(rnd_seed=rnd_seed, num_subj=n, Fs=freq, IDini=0, rango_offset = [35, 39], rango_amp = [10, 15], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion])
+                .expand_dims({'n_var':['c'], 'momento':['pre']})
+                .transpose('ID', 'momento', 'n_var', 'time')
+            )
+    Post_c = (create_time_series_xr(rnd_seed=rnd_seed, num_subj=n, Fs=freq, IDini=0, rango_offset = [32, 36], rango_amp = [12, 16], rango_frec = [1.48, 1.52], rango_af=[0, 30], amplific_ruido=[0.4, 0.7], fc_ruido=[3.0, 3.5], rango_duracion=[duracion, duracion])
+                .expand_dims({'n_var':['c'],'momento':['post']})
+                .transpose('ID', 'momento', 'n_var', 'time')
+                )
+    var_c= xr.concat([Pre_c, Post_c], dim='momento')    
+        
+    #concatena todos los sujetos
+    daTodos = xr.concat([var_a, var_b, var_c], dim='n_var')
+    daTodos.name = 'Angle'
+    daTodos.attrs['freq'] = 1/(daTodos.time[1].values - daTodos.time[0].values)#incluimos la frecuencia como atributo
     daTodos.attrs['units'] = 'deg'
     daTodos.time.attrs['units'] = 's'
-        
-    #sns.relplot(data=dfTodosArchivos, x='time', y='value',  col='tiempo', row='nom_var', units='ID', estimator=None, hue='ID',  kind='line')
-    
+
+    #Gráficas
+    daTodos.plot.line(x='time', col='momento', hue='ID', row='n_var')
+
+
     # =============================================================================
     # %% Test the functions 
     # =============================================================================
@@ -367,51 +402,51 @@ if __name__ == '__main__':
     da.detect_events() #devuelve los índices de los cuts
     da.events
     dacuts = da.slice_time_series() #corta con los índices buscados anteriormente
-    dacuts.sel(nom_var='a').plot.line(x='time', col='tiempo', hue='phase', row='ID')
+    dacuts.sel(n_var='a').plot.line(x='time', col='momento', hue='phase', row='ID')
     
    
     #Corta directamente
     dacuts = (SliceTimeSeriesPhases(data=daTodos, func_events=detect_peaks, max_phases=100)
                 .slice_time_series()
                 )
-    dacuts.sel(nom_var='a').plot.line(x='time', col='tiempo', hue='phase', row='ID')
+    dacuts.sel(n_var='a').plot.line(x='time', col='momento', hue='phase', row='ID')
     
     
     #Especificando una de las variables para hacer todos los cortes
-    dacuts = (SliceTimeSeriesPhases(data=daTodos, func_events=detect_peaks, reference_var=dict(nom_var='b'))
+    dacuts = (SliceTimeSeriesPhases(data=daTodos, func_events=detect_peaks, reference_var=dict(n_var='b'))
                 .slice_time_series()
                 )
-    dacuts.stack(var_tiempo=('nom_var', 'tiempo')).plot.line(x='time', col='var_tiempo', hue='phase', row='ID')
+    dacuts.stack(var_momento=('n_var', 'momento')).plot.line(x='time', col='var_momento', hue='phase', row='ID')
     
 
 
     #Cortar aportando cuts ya buscados o ajustados previamente
-    cortes_idx = SliceTimeSeriesPhases(data=daTodos, func_events=detect_peaks, reference_var=dict(nom_var='a'), max_phases=100).detect_events()
+    cortes_idx = SliceTimeSeriesPhases(data=daTodos, func_events=detect_peaks, reference_var=dict(n_var='a'), max_phases=100).detect_events()
     cortes_retocados = cortes_idx.isel(n_event=slice(3,20,2))
 
     dacor = SliceTimeSeriesPhases(data=daTodos).slice_time_series(cortes_retocados)
-    dacor.isel(ID=slice(None,6)).sel(nom_var='a').plot.line(x='time', col='tiempo', hue='phase', row='ID')
+    dacor.isel(ID=slice(None,6)).sel(n_var='a').plot.line(x='time', col='momento', hue='phase', row='ID')
 
 
-    cortes_idx = SliceTimeSeriesPhases(data=daTodos, func_events=detect_peaks, reference_var=dict(nom_var='a'), max_phases=100).detect_events()
+    cortes_idx = SliceTimeSeriesPhases(data=daTodos, func_events=detect_peaks, reference_var=dict(n_var='a'), max_phases=100).detect_events()
     cortes_retocados = cortes_idx.isel(n_event=slice(5,20))
 
     dacor = SliceTimeSeriesPhases(data=daTodos).slice_time_series(events=cortes_retocados)
-    dacor.isel(ID=slice(None,6)).sel(nom_var='c').plot.line(x='time', col='tiempo', hue='phase', row='ID')
+    dacor.isel(ID=slice(None,6)).sel(n_var='c').plot.line(x='time', col='momento', hue='phase', row='ID')
 
 
     daCortado = (SliceTimeSeriesPhases(daTodos, func_events=SliceTimeSeriesPhases.detect_onset_detecta_aux, 
-                                 reference_var=dict(tiempo='pre', nom_var='b'),
+                                 reference_var=dict(momento='pre', n_var='b'),
                                  discard_phases_ini=0, n_phases=None, discard_phases_end=0,
                                  include_first_next_last=True, **dict(threshold=60)
                                  )
                  .slice_time_series()
                  )
-    daCortado.sel(nom_var='b').plot.line(x='time', col='tiempo', hue='phase', row='ID')
+    daCortado.sel(n_var='b').plot.line(x='time', col='momento', hue='phase', row='ID')
     
       
     daCortado = (SliceTimeSeriesPhases(data=daTodos, func_events=SliceTimeSeriesPhases.find_peaks_aux, 
-                             reference_var=dict(tiempo='pre', nom_var='b'),
+                             reference_var=dict(momento='pre', n_var='b'),
                              discard_phases_ini=0, n_phases=None, discard_phases_end=0,
                              include_first_next_last=True, **dict(height=60, distance=10)
                              )
@@ -419,47 +454,47 @@ if __name__ == '__main__':
                      )
     
     daCortado = (SliceTimeSeriesPhases(data=daTodos, func_events=SliceTimeSeriesPhases.find_peaks_aux, 
-                             reference_var=dict(tiempo='pre', nom_var='b'),
+                             reference_var=dict(momento='pre', n_var='b'),
                              discard_phases_ini=0, n_phases=None, discard_phases_end=0,
                              include_first_next_last=True, **dict(height=140, distance=1))
                  .slice_time_series()
                  )
-    daCortado.sel(nom_var='b').plot.line(x='time', col='tiempo', hue='phase', row='ID')
+    daCortado.sel(n_var='b').plot.line(x='time', col='momento', hue='phase', row='ID')
     
     
     daCortado = (SliceTimeSeriesPhases(data=daTodos, func_events=detect_peaks, 
-                                       reference_var=dict(tiempo='pre', nom_var='b'), max_phases=100,
+                                       reference_var=dict(momento='pre', n_var='b'), max_phases=100,
                                        **dict(mph=140))
                 .slice_time_series()
                 )
-    daCortado.sel(nom_var='b').plot.line(x='time', col='tiempo', hue='phase', row='ID')
+    daCortado.sel(n_var='b').plot.line(x='time', col='momento', hue='phase', row='ID')
     
     
     #find_peaks with xSD
     daCortado = (SliceTimeSeriesPhases(data=daTodos, func_events=SliceTimeSeriesPhases.find_peaks_aux, 
-                             reference_var=dict(tiempo='pre', nom_var='b'),
+                             reference_var=dict(momento='pre', n_var='b'),
                              discard_phases_ini=0, n_phases=None, discard_phases_end=0,
                              include_first_next_last=True, **dict(xSD=1.4, distance=1))
                  .slice_time_series()
                  )
-    daCortado.sel(nom_var='b').plot.line(x='time', col='tiempo', hue='phase', row='ID')
+    daCortado.sel(n_var='b').plot.line(x='time', col='momento', hue='phase', row='ID')
     
     
     #onset by xSD
     daCortado = (SliceTimeSeriesPhases(daTodos, func_events=SliceTimeSeriesPhases.detect_onset_detecta_aux, 
-                                 #reference_var=dict(tiempo='pre', nom_var='b'),
+                                 #reference_var=dict(momento='pre', n_var='b'),
                                  discard_phases_ini=0, n_phases=None, discard_phases_end=0,
                                  include_first_next_last=True, **dict(xSD=-1.2)
                                  )
                  .slice_time_series()
                  )
-    daCortado.sel(nom_var='b').plot.line(x='time', col='tiempo', hue='phase', row='ID')
+    daCortado.sel(n_var='b').plot.line(x='time', col='momento', hue='phase', row='ID')
     
         
     
     #Trim data, slice ini and end events
     daEvents = (SliceTimeSeriesPhases(data=daTodos, func_events=SliceTimeSeriesPhases.find_peaks_aux, 
-                             reference_var=dict(tiempo='pre', nom_var='b'),
+                             reference_var=dict(momento='pre', n_var='b'),
                              discard_phases_ini=0, n_phases=None, discard_phases_end=0,
                              include_first_next_last=True, **dict(height=0, distance=10))
                  .detect_events()
@@ -469,7 +504,7 @@ if __name__ == '__main__':
     #ventana = daEvents.isel(n_event=[5,7]) #xr.concat([daEvents.isel(n_event=5), daEvents.isel(n_event=7)], dim='n_event')
      
     daTrimed = SliceTimeSeriesPhases(daTodos).slice_time_series(events=ventana)
-    daTrimed.sel(nom_var='b').plot.line(x='time', col='tiempo', hue='phase', row='ID')
+    daTrimed.sel(n_var='b').plot.line(x='time', col='momento', hue='phase', row='ID')
     
    
     
