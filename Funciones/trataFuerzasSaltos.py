@@ -21,18 +21,24 @@ from matplotlib.backends.backend_pdf import PdfPages #para guardar gráficas en 
 import time #para cuantificar tiempos de procesado
 
 from pathlib import Path
+import sys
+
+sys.path.append(r'F:\Programacion\Python\Mios\Functions')
 
 from detecta import detect_onset
 #from scipy.signal import find_peaks #sustituir por detecta?????
 
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.1.2.0'
-__date__ = '04/10/2023'
+__version__ = 'v.1.3.0'
+__date__ = '22/01/2024'
 
 
 #TODO: probar detectar umbrales con scipy.stats.threshold
 """
 Modificaciones:
+    22/01/2024, v.1.3.0
+            - Añadidas variables de resultado tiempo de los eventos.
+                  
     04/10/2023, v.1.1.4
             - Separada función de pasar de polars a dataarray. Cuando carga
               con polars devuelve xarray con todas las variables que carga.
@@ -116,17 +122,42 @@ Modificaciones:
     '10/09/2022', v.1.0.0
             - Versión inicial con varias funciones.
 """
+
+
+# =============================================================================
+# ---- VARIABLES
+# =============================================================================
+eventos_basicos = ['iniAnalisis', 'preactiv', 'iniPeso', 'finPeso', 'iniMov',
+                    'maxFz', 'minFz', 'maxV',
+                    'iniImpPos', 'maxFlex', 'finImpPos',
+                    'despegue', 'aterrizaje', 'finMov', 'finAnalisis'
+                   ]
+
 # =============================================================================
 # ---- FUNCIONES DE APOYO
 # =============================================================================
-def asigna_subcategorias_xr(da, n_estudio='X', subtipo='X'):
-    da = da.assign_coords(estudio=('ID', da.ID.to_series().str.split('_').str[0].to_list()),
-                          particip=('ID', da.ID.to_series().str.split('_').str[1].to_list()),
-                          tipo=('ID', da.ID.to_series().str.split('_').str[2].to_list()),
-                          subtipo=('ID', da.ID.to_series().str.split('_').str[3].to_list()),
-                          repe=('ID', da.ID.to_series().str.split('_').str[4].to_list()),
-                          )
+def asigna_subcategorias_xr(da, n_estudio=None, subtipo='X'):
+    if not subtipo:
+        subtipo='X'
     
+    if len(da.ID.to_series().iloc[0].split('_'))==5:
+        da = da.assign_coords(estudio=('ID', da.ID.to_series().str.split('_').str[0].to_list()),
+                              particip=('ID', da.ID.to_series().str.split('_').str[1].to_list()),
+                              tipo=('ID', da.ID.to_series().str.split('_').str[2].to_list()),
+                              subtipo=('ID', da.ID.to_series().str.split('_').str[3].to_list()),
+                              repe=('ID', da.ID.to_series().str.split('_').str[4].to_list()),
+                              )
+
+    elif len(da.ID.to_series().iloc[0].split('_'))==4:
+        if n_estudio is None:
+            n_estudio='X'
+        da = da.assign_coords(estudio=('ID', [n_estudio]*len(da.ID)),
+                              particip=('ID', da.ID.to_series().str.split('_').str[0].to_list()),
+                              tipo=('ID', da.ID.to_series().str.split('_').str[1].to_list()),
+                              subtipo=('ID', da.ID.to_series().str.split('_').str[2].to_list()),
+                              repe=('ID', da.ID.to_series().str.split('_').str[3].to_list()),
+                              )
+       
     """
     #versión basada en df polars
     da = da.assign_coords(estudio=('ID', df.filter(pl.col('time')==0.000).get_column('estudio').to_list()),
@@ -185,7 +216,7 @@ def integra_completo(daDatos, daEventos):
         #print(ID)
         #plt.plot(data[ini:fin])
         try:
-            dat = integrate.cumtrapz(data[ini:fin], t[ini:fin], initial=0)[-1]
+            dat = integrate.cumulative_trapezoid(data[ini:fin], t[ini:fin], initial=0)[-1]
         except:
             #print(f'Fallo al integrar en {ID}')
             dat=np.nan
@@ -272,22 +303,24 @@ def separa_dim_repe(da):
     
     #rep0 = da.sel(ID=da.ID.str.endswith('1'))
     rep0 = da.where(da.repe==da.repe[0], drop=True)
-    rep0 = (rep0.assign_coords(ID=rep0.ID.str.rstrip(f'_{rep0.repe[0].data}'))
+    rep0 = (rep0.assign_coords(ID=['_'.join(s.split('_')[:-1]) for s in rep0.ID.data.tolist()]) #rep0.ID.str.rstrip(f'_{rep0.repe[0].data}'))
             .drop_vars('repe')
             )
+    
+    
     rep1 = da.where(da.repe==da.repe[1], drop=True)
-    rep1 = (rep1.assign_coords(ID=rep1.ID.str.rstrip(f'_{rep1.repe[1].data}'))
+    rep1 = (rep1.assign_coords(ID=['_'.join(s.split('_')[:-1]) for s in rep1.ID.data.tolist()]) #rep1.ID.str.rstrip(f'_{rep1.repe[1].data}'))
             .drop_vars('repe')
             )
     
     rep2 = da.where(da.repe==da.repe[2], drop=True)
-    rep2 = (rep2.assign_coords(ID=rep2.ID.str.rstrip(f'_{rep2.repe[2].data}'))
+    rep2 = (rep2.assign_coords(ID=['_'.join(s.split('_')[:-1]) for s in rep2.ID.data.tolist()]) #rep2.ID.str.rstrip(f'_{rep2.repe[2].data}'))
             .drop_vars('repe')
             )
     
     da = (xr.concat([rep0, rep1, rep2], dim='repe')
                 .assign_coords(repe=[0,1,2])
-                ).transpose('ID', 'n_var', 'repe', 'time')
+                )#.transpose('ID', 'n_var', 'repe', 'time')
     
     print('CUIDADO: revisar que los números de repetición son correctos')
     
@@ -431,30 +464,32 @@ def carga_bioware_pl(file, lin_header=17, n_vars_load=None):
 
 #Carga un archivo Bioware C3D a xarray
 def carga_bioware_c3d(file, lin_header=17, n_vars_load=None):
-    sys.path.append('F:\Programacion\Python\Mios\Functions')
     from read_kistler_c3d import read_kistler_c3d_xr
-    
+    #from read_vicon_c3d import read_vicon_c3d_xr, read_vicon_c3d_xr_global
+
     da = read_kistler_c3d_xr(file)
         
     return da
 
 
-def load_merge_vicon_csv(ruta, section=None, n_vars_load=None, tipo_datos=None, show=False):
+def load_merge_vicon_csv(ruta, section=None, n_vars_load=None, n_estudio=None, tipo_datos=None, asigna_subcat=True, show=False):
+    from readViconCsv import read_vicon_csv_pl_xr
+    
     lista_archivos = sorted(list(ruta.glob('**/*.csv')))#incluye los que haya en subcarpetas
     lista_archivos = [x for x in lista_archivos if 'error' not in  x.name] #selecciona archivos
     #lista_archivos.sort()
 
     print('Cargando los archivos...')
-    timer_carga = time.time() #inicia el contador de tiempo
+    timer_carga = time.perf_timer() #inicia el contador de tiempo
 
     daTodos = [] #guarda los dataframes que va leyendo en formato lista y al final los concatena
     ErroresArchivos = [] #guarda los nombres de archivo que no se pueden abrir y su error
     num_archivos_procesados = 0
-    for file in lista_archivos:
-        print('Cargando archivo: {0:s}'.format(file.name))
+    for n, file in enumerate(lista_archivos):
+        print(f'Cargando archivo: {n}/{len(lista_archivos)} {file.name}')
         try:            
-            daProvis = (pf.read_vicon_csv_pl_xr(file, section=section,
-                                              n_vars_load=nom_vars_cargar)
+            daProvis = (read_vicon_csv_pl_xr(file, section=section,
+                                              n_vars_load=n_vars_load)
                         .expand_dims({'ID':['_'.join(file.stem.split('_'))]},
                                       axis=0) #Añade columna ID
                         )
@@ -467,6 +502,68 @@ def load_merge_vicon_csv(ruta, section=None, n_vars_load=None, tipo_datos=None, 
             ErroresArchivos.append(f'{file.name}  {str(err)}')
             continue
         
+    print(f'Cargados {num_archivos_procesados} archivos de {len(lista_archivos)} en {time.perf_timer() - timer_carga:.3f} s \n')
+    
+    #Si no ha podido cargar algún archivo, lo indica
+    if len(ErroresArchivos) > 0:
+        print('\nATENCIÓN. No se ha podido cargar:')
+        for x in range(len(ErroresArchivos)):
+            print(ErroresArchivos[x])
+    
+    #Agrupa
+    daTodos = xr.concat(daTodos, dim='ID') 
+    #daTodos.sel(axis='z').plot.line(x='time', col='ID', col_wrap=3)
+        
+    #Llama asignar subcategorías aquí o después en parte principal?
+    if asigna_subcat:
+        daTodos = asigna_subcategorias_xr(da=daTodos, n_estudio=n_estudio)
+        
+    return daTodos
+
+
+def load_merge_vicon_csv_selectivo(ruta, hoja_registro=None, section=None, n_vars_load=None, n_estudio=None, tipo_datos=None, show=False):
+    #Carga listado de archivos basado en hoja de registro
+    
+    from readViconCsv import read_vicon_csv_pl_xr
+    #from read_vicon_c3d import read_vicon_c3d_xr, read_vicon_c3d_xr_global
+
+    if hoja_registro is None:
+        print('Debes especificar la hoja de registro')
+        return
+    h_r = hoja_registro.iloc[:,1:].dropna(how='all')
+    # lista_archivos = sorted(list(ruta.glob('**/*.csv')))#incluye los que haya en subcarpetas
+    # lista_archivos = [x for x in lista_archivos if 'error' not in  x.name] #selecciona archivos
+    #lista_archivos.sort()
+
+    print('Cargando los archivos...')
+    timer_carga = time.time() #inicia el contador de tiempo
+
+    daTodos = [] #guarda los dataframes que va leyendo en formato lista y al final los concatena
+    ErroresArchivos = [] #guarda los nombres de archivo que no se pueden abrir y su error
+    num_archivos_procesados = 0
+    
+    for S in h_r.index:
+        for t in ['CMJ_2', 'SJ_0L', 'SJ_100L', 'SJ_100S']:            
+            for r in h_r.filter(regex=t).loc[S]:                 
+                if r is not np.nan:
+                    file = Path((ruta / f'{S}_{t}_{r}').with_suffix('.csv'))
+                    print(f'Cargando sección {section}, archivo: {file.name}')
+                    #print(f'{S}_{t}_{r}', f'{S}_{t}_{r}' in [x.stem for x in lista_archivos])
+                    try:            
+                        daProvis = (read_vicon_csv_pl_xr(file, section=section,
+                                                          n_vars_load=n_vars_load)
+                                    .expand_dims({'ID':['_'.join(file.stem.split('_'))]},
+                                                  axis=0) #Añade dimensión ID
+                                    )
+                        daTodos.append(daProvis)
+                        #daProvis.isel(ID=0, n_var=0, axis=-1).plot.line(x='time')
+                        num_archivos_procesados += 1
+                    
+                    except Exception as err: #Si falla anota un error y continua
+                        print('\nATENCIÓN. No se ha podido procesar '+ file.name, err, '\n')          
+                        ErroresArchivos.append(f'{file.name}  {str(err)}')
+                        continue
+           
     print('Cargados {0:d} archivos en {1:.3f} s \n'.format(num_archivos_procesados, time.time() - timer_carga))
     
     #Si no ha podido cargar algún archivo, lo indica
@@ -479,7 +576,8 @@ def load_merge_vicon_csv(ruta, section=None, n_vars_load=None, tipo_datos=None, 
     daTodos = xr.concat(daTodos, dim='ID') 
     #daTodos.sel(axis='z').plot.line(x='time', col='ID', col_wrap=3)
         
-    daTodos = asigna_subcategorias_xr(da=daTodos, n_estudio=config.n_project)
+    #Llama asignar subcategorías aquí o después en parte principal?
+    daTodos = asigna_subcategorias_xr(da=daTodos, n_estudio=n_estudio)
         
     return daTodos
     
@@ -539,16 +637,16 @@ def load_merge_bioware_pl(ruta, n_vars_load=None, estudio=None, data_type=None, 
     
     
     print('\nCargando los archivos...')
-    timerCarga = time.time() #inicia el contador de tiempo
+    timerCarga = time.perf_counter() #inicia el contador de tiempo
     
     numArchivosProcesados = 0    
     dfTodos = [] #guarda los dataframes que va leyendo en formato lista y al final los concatena
     daTodos = []
     ErroresArchivos = [] #guarda los nombres de archivo que no se pueden abrir y su error
     for nf, file in enumerate(lista_archivos): 
-        print('Cargando archivo nº {0}: {1:s}'.format(nf, file.name))            
+        print(f'Cargando archivo nº {nf}/{len(lista_archivos)}: {file.name}')            
         try:
-            timerSub = time.time() #inicia el contador de tiempo
+            timerSub = time.perf_counter() #inicia el contador de tiempo
             
             dfProvis = carga_bioware_pl(file, lin_header, n_vars_load)
             
@@ -587,7 +685,7 @@ def load_merge_bioware_pl(ruta, n_vars_load=None, estudio=None, data_type=None, 
             dfTodos.append(dfProvis)
         
             print(f'{dfTodos[-1].shape[0]} filas y {dfTodos[-1].shape[1]} columnas')
-            print('Tiempo {0:.3f} s \n'.format(time.time()-timerSub))
+            print('Tiempo {0:.3f} s \n'.format(time.perf_counter()-timerSub))
             numArchivosProcesados+=1
         
         except Exception as err: #Si falla anota un error y continúa
@@ -598,7 +696,7 @@ def load_merge_bioware_pl(ruta, n_vars_load=None, estudio=None, data_type=None, 
     dfTodos = pl.concat(dfTodos)
     
         
-    print(f'Cargados {numArchivosProcesados} archivos en {time.time()-timerCarga:.3f} s \n')
+    print(f'Cargados {numArchivosProcesados} archivos en {time.perf_counter()-timerCarga:.3f} s \n')
     
     #Si no ha podido cargar algún archivo, lo indica
     if len(ErroresArchivos) > 0:
@@ -682,6 +780,105 @@ def load_merge_bioware_pl(ruta, n_vars_load=None, estudio=None, data_type=None, 
 
 
 
+def load_merge_bioware_c3d(ruta, n_vars_load=None, n_estudio=None, data_type=None, split_plats=False, merge_2_plats=1, asigna_subcat=True, show=False):
+    #from read_kistler_c3d import read_kistler_c3d_xr
+    import read_kistler_c3d as rkc3d
+    
+    #ruta = Path(r'F:\Investigacion\Proyectos\Saltos\PotenciaDJ\Registros\2023PotenciaDJ\S01')
+    if data_type is None:
+        data_type = float
+        
+    lista_archivos = sorted(list(ruta.glob('*.c3d')))#'**/*.txt' incluye los que haya en subcarpetas
+    lista_archivos = [x for x in lista_archivos if 'error' not in  x.name] #selecciona archivos
+    
+    """if n_vars_load is None: #si no vienen impuestas las columnas a cargar
+        n_vars_load = ['abs time (s)'] #, 'Fx', 'Fy', 'Fz']
+        if n_vars_load !=2: #in [0,1]:
+            n_vars_load += ['Fx', 'Fy', 'Fz'] #['Fx.1', 'Fy.1', 'Fz.1']
+            if n_vars_load != 1:
+                n_vars_load += ['Fx_duplicated_0', 'Fy_duplicated_0', 'Fz_duplicated_0'] #['Fx.1', 'Fy.1', 'Fz.1']
+        else:
+            n_vars_load += ['Fx_duplicated_0', 'Fy_duplicated_0', 'Fz_duplicated_0'] #['Fx.1', 'Fy.1', 'Fz.1']
+    """
+    
+    print('\nCargando los archivos...')
+    timerCarga = time.perf_counter() #inicia el contador de tiempo
+    
+    numArchivosProcesados = 0    
+    daTodos = []
+    ErroresArchivos = [] #guarda los nombres de archivo que no se pueden abrir y su error
+    for nf, file in enumerate(lista_archivos): 
+        print(f'Cargando archivo nº {nf+1}/{len(lista_archivos)}: {file.name}')            
+        try:
+            timerSub = time.perf_counter() #inicia el contador de tiempo
+            
+            """
+            #Asigna etiquetas de categorías                   
+            if len(file.stem.split("_")) == 5:
+                estudio = file.stem.split("_")[0]
+                particip = file.stem.split("_")[-4]
+                tipo = file.stem.split('_')[-3]
+                subtipo = file.stem.split('_')[-2]
+            elif len(file.stem.split("_")) == 4:
+                #estudio = file.stem.split("_")[0]
+                particip = file.stem.split("_")[0]
+                tipo = file.stem.split('_')[-3]
+                subtipo = file.stem.split('_')[-2]
+            elif len(file.stem.split("_")) == 3:
+                particip = file.stem.split("_")[0]
+                tipo = file.stem.split('_')[-2]
+                subtipo = 'X'
+            if n_estudio is None:
+                estudio = 'EstudioX'
+            
+            repe = str(int(file.stem.split('_')[-1])) #int(file.stem.split('.')[0][-1]
+            ID = f'{estudio}_{particip}_{tipo}_{subtipo}_{repe}' #f'{estudio}_{file.stem.split("_")[0]}_{tipo}_{subtipo}'
+            """
+            daProvis = (rkc3d.read_kistler_c3d_xr(file)
+                        .expand_dims({'ID':['_'.join(file.stem.split('_'))]},
+                                      axis=0) #Añade columna ID
+                        )            
+            
+            daTodos.append(daProvis)
+        
+            print('Tiempo {0:.3f} s \n'.format(time.perf_counter()-timerSub))
+            numArchivosProcesados+=1
+        
+        except Exception as err: #Si falla anota un error y continúa
+            print('\nATENCIÓN. No se ha podido procesar {0}, {1}, {2}'.format(file.parent.name, file.name, err), '\n')
+            ErroresArchivos.append(file.parent.name+' '+file.name+' '+ str(err))
+            continue    
+    
+    daTodos = xr.concat(daTodos, dim='ID')
+            
+    print(f'Cargados {numArchivosProcesados} archivos en {time.perf_counter()-timerCarga:.3f} s \n')
+    
+    #Si no ha podido cargar algún archivo, lo indica
+    if len(ErroresArchivos) > 0:
+        print('\nATENCIÓN. No se ha podido cargar:')
+        for x in range(len(ErroresArchivos)):
+            print(ErroresArchivos[x])
+
+    if isinstance(data_type, str): #si se ha definido algún tipo de datos, por defecto es 'float64'
+        daTodos = daTodos.astype(data_type)
+    
+    if split_plats:       
+        daTodos = rkc3d.split_plataforms(daTodos)   
+    
+    #Llama asignar subcategorías aquí o después en parte principal?
+    if asigna_subcat:
+        daTodos = asigna_subcategorias_xr(da=daTodos, n_estudio=n_estudio)
+           
+    
+    #daTodos = asigna_subcategorias_xr(da=daTodos, n_estudio=estudio, subtipo='2PAP')
+        
+    daTodos.name = 'Forces'
+    
+    
+    return daTodos
+
+
+
 
 def carga_preprocesados(ruta_trabajo, nomArchivoPreprocesado, tipo_test):
     if Path((ruta_trabajo / (nomArchivoPreprocesado)).with_suffix('.nc')).is_file():
@@ -736,12 +933,17 @@ def chequea_igualdad_ini_fin(daDatos, margen=20, ventana=None, retorna=None, sho
     Con 'resta' retorna la diferencia ini-fin en todos, independientemente del umbral;
     con cualquier otra cosa devuelve el registro completo de los que cumplen las
     condiciones de margen en la resta de la ventana ini-fin.
+    ventana: duración de la ventana al final para comprobar. Se puede pasar en segundos
+             o en nº de fotogramas.
     """
     
     if ventana is None:
-        ventana=[500, 500]
-    elif isinstance(ventana, int):
+        ventana = [int(0.5 * daDatos.freq), int(0.5 * daDatos.freq)]
+    elif isinstance(ventana, int): #si se se envía un entreso se asume que en nº de datos
         ventana = [ventana, ventana]
+    elif isinstance(ventana, float): #si se se envía un entreso se asume que en nº de datos
+        ventana = [int(ventana * daDatos.freq), int(ventana * daDatos.freq)]
+    
         
     def resta_ini_fin_aux(data, margen, ventana0, ventana1, retorna, ID):
         resta = np.nan
@@ -808,10 +1010,107 @@ def chequea_igualdad_ini_fin(daDatos, margen=20, ventana=None, retorna=None, sho
     return daResta if retorna=='resta' else daDatos.loc[dict(ID=daDatos.ID.isin(daCorrectos.ID))]
     
 
+def chequea_fin_plano(daDatos, daEventos=None, margen=0.1, ventana=0.5, retorna=None, tipo_calculo='std', show=False):
+    """ 
+    #TODO: FALTA POR COMPROBAR
+    Comprueba si el registro ya cortado termina con valores estables de velocidad
+    ventana: duración de la ventana al final para comprobar en segundos
+    """
+    
+    if 'axis' in daDatos.dims:
+        daDatos = daDatos.sel(axis='z')
+    
+    
+    if isinstance(ventana, float):
+        ventana = ventana * daDatos.freq
+        
+    if isinstance(margen, float):
+        margen = int(margen*daDatos.freq)
+        
+
+    if tipo_calculo=='std':
+        #Recorta a una ventana desde el final
+        daEventos.loc[dict(evento='iniAnalisis')] = daEventos.sel(evento='finAnalisis') - ventana
+        daDatosCort = recorta_ventana_analisis(daDatos, daEventos)
+        
+        if show:        
+            daDatosCort.isel(ID=slice(None)).plot.line(x='time', col='ID', col_wrap=4)
+    
+        return daDatosCort.std(dim='time')
+        
+    
+    
+    def fin_plano_aux(data, margen, ventana, retorna, ID):
+        resta = np.nan
+        if np.count_nonzero(~np.isnan(data))==0:
+            return resta
+        data = data[~np.isnan(data)]
+        return data[-margen:].mean() - data[-ventana+margen:].mean()
+           
+    if 'axis' in daDatos.dims:
+        daDatosZ = daDatos.sel(axis='z')
+    else:
+        daDatosZ = daDatos
+    
+    """
+    data = daDatosZ[0,0].data
+    """
+    daResta = xr.apply_ufunc(fin_plano_aux, daDatosZ, margen, ventana, retorna, daDatos.ID,
+                   input_core_dims=[['time'], [], [], [], [] ],
+                   #output_core_dims=[['time']],
+                   exclude_dims=set(('time',)),
+                   vectorize=True,
+                   #join='outer'
+                   )
+    
+    daCorrectos = xr.where(abs(daResta) < margen, daDatosZ.ID, np.nan, keep_attrs=True).dropna('ID')
+    
+    """
+    def chequea_ini_fin_aux(data, margen, ventana, retorna, ID):
+        retID = None if retorna=='nombre' else np.nan
+        
+        if np.count_nonzero(~np.isnan(data))==0:
+            return retID
+        
+        data = data[~np.isnan(data)]
+        diferencia = data[:ventana].mean() - data[-ventana:].mean()
+        if retorna=='nombre':
+            if abs(diferencia) < margen:
+                retID = ID
+        else: retID = diferencia
+        return retID    
+    
+    daCorrectos = xr.apply_ufunc(chequea_ini_fin_aux, daDatos, margen, ventana, retorna, daDatos.ID,
+                   input_core_dims=[['time'], [], [], [], [] ],
+                   #output_core_dims=[['time']],
+                   exclude_dims=set(('time',)),
+                   vectorize=True,
+                   #join='outer'
+                   )
+    if retorna=='nombre':
+        daCorrectos = daCorrectos.dropna('ID')
+    """
+    if show:
+        if retorna=='resta':
+            daResta.assign_coords(ID=np.arange(len(daResta.ID))).plot.line(x='ID', marker='o')
+        else:
+            no_cumplen = daDatosZ.loc[dict(ID=~daDatosZ.ID.isin(daCorrectos.ID))]
+            if len(no_cumplen.ID) > 0:
+                no_cumplen.plot.line(x='time', alpha=0.5, add_legend=False)
+                plt.title(f'Gráfica con los {len(no_cumplen)} que no cumplen el criterio')
+                #graficas_eventos(no_cumplen)
+            else:
+                print('\nTodos los registros cumplen el criterio')
+            
+    return daResta if retorna=='resta' else daDatos.loc[dict(ID=daDatos.ID.isin(daCorrectos.ID))]
+    
+
+
+
 def estima_inifin_analisis(daDatos, daEventos, ventana=[1.5, 1.5], tipo_test='CMJ', umbral=20.0, show=False):
     """
         Intenta estimar el inicio y final del análisis a partir del centro del vuelo
-        ventana: tiempo en segundos antes y después del centro del vuelo
+        ventana: tiempo en segundos antes y después del despegue y el aterrizaje, respectivamente
     """
     if not isinstance(ventana, list): #si se aporta un solo valor, considera que la mitad es para el inicio y la otra para el final
         ventana = np.array([ventana, ventana])
@@ -926,6 +1225,185 @@ def calcula_peso(daDatos, ventana_peso=None, show=False):
                     print('Error al pintar peso en', g.name_dicts[h, i], h,i)
     return daPeso
 
+
+
+def afina_final(daDatos, daEventos=None, ventana=0.2, margen=0.005, tipo_calculo='opt', show=False):
+    """    
+    tipo_calculo puede ser 'opt', 'iter', 'iter_gradiente' o 'iter_final'
+    """
+    
+    if 'axis' in daDatos.dims:
+        daDatos = daDatos.sel(axis='z')
+        
+    def integra(data, t, peso):
+        dat = np.full(len(data), np.nan)        
+        try:
+            dat = integrate.cumtrapz(data-peso, t, initial=0)
+        except:
+            pass #dat = np.full(len(data), np.nan)            
+        return dat
+    
+    if isinstance(ventana, float):
+        ventana = ventana * daDatos.freq
+
+    
+    #Recorta a una ventana desde el final
+    daEventos.loc[dict(evento='iniAnalisis')] = daEventos.sel(evento='finAnalisis') - ventana
+    daDatosCort = recorta_ventana_analisis(daDatos, daEventos)
+    
+    if show:        
+        daDatosCort.isel(ID=slice(None)).plot.line(x='time', col='ID', col_wrap=4)
+
+    daDatosCort.std(dim='time')
+
+    def peso_iter_gradiente(data, t, peso, ini, fin, margen, ID):#, rep):
+        """
+        Va ajustando el peso teniendo en cuenta la diferncia con la iteración
+        anterior, hasta que la diferencia es menor que un nº mínimo.
+        """
+        #print(ID, rep)
+        if np.count_nonzero(~np.isnan(data))==0:
+             return np.asarray([np.nan, np.nan])
+        
+        try:
+            # plt.plot(data)
+            # plt.axhline(peso)
+            ini = int(ini)
+            fin = int(fin)
+            data = data[ini:fin]
+            t = t[ini:fin]-t[ini]                    
+        
+            pes = peso-100
+            delta_peso = 1
+            tend_pes=[]
+            v = np.full(len(data), 20.0)
+            for i in range(1000):
+                v0 = integra(data, t, pes) / (pes/9.8)
+                v1 = integra(data, t, pes+delta_peso) / (pes+delta_peso/9.8)
+                pes += (v0[-1]-v1[-1])#*1
+                tend_pes.append(pes)
+                if i >2 and pes - tend_pes[-2] < 0.00001:
+                    break
+            # plt.plot(tend_pes)
+                
+            
+        except:
+            print('No se encontró')
+            return np.asarray([np.nan, np.nan])
+        
+        if show:
+            plt.plot(v0, lw=0.2, label='ajustado')
+            v = integra(data, t, peso) / (peso/9.8)
+            plt.plot(v, lw=0.2, label='raw')
+            plt.title('Cálculo iterativo descenso gradiente')
+            plt.legend()
+            plt.show()
+            # plt.axhline(data[vent0:vent1].mean(), ls='--', lw=0.5)  
+            
+        return np.asarray([pes, peso-pes])
+    
+    
+    def peso_iter_final(data, t, peso, ini, fin, margen, ID):#, rep):
+        #Ajuste para saltos con preactivación. Devuelve el peso ajustado y la diferencia entre el peso anterior y el ajustado
+        #print(ID, rep)
+        if np.count_nonzero(~np.isnan(data))==0:
+             return np.asarray([np.nan, np.nan])
+        
+        try:
+            # plt.plot(data)
+            # plt.axhline(peso)
+            ini = int(ini)
+            fin = int(fin)
+            data = data[ini:fin]
+            t = t[ini:fin]-t[ini]                    
+        
+            #primera pasada más gruesa
+            itera=0
+            pes = 300
+            v = np.arange(len(data)) #np.full(len(data), 20.0)
+            #while not -3 < v[-1] < 3 and pes < peso+100:
+            while v[int(-0.2*daDatos.freq):int(-0.1*daDatos.freq)].mean() - v[int(-.5*daDatos.freq):int(-.4*daDatos.freq)].mean() > 0.05 and pes < 1300:
+                v = integra(data, t, pes) / (pes/9.8)
+                #plt.plot(v, lw=0.2)
+                pes += 5.0
+                itera+=1
+                #print('iters=', itera, 'peso=', pes, 'v=', v[-1])
+            
+            
+            #Segunda pasada más fina
+            itera=0
+            pes = pes-4
+            v = integra(data, t, pes) / (pes/9.8)
+            while v[int(-0.1*daDatos.freq):int(-0.05*daDatos.freq)].mean() - v[int(-.3*daDatos.freq):int(-.25*daDatos.freq)].mean() > margen and pes < 1300:
+                v = integra(data, t, pes) / (pes/9.8)
+                # plt.plot(v, lw=0.2)
+                # plt.plot(len(v)-int(0.2*daDatos.freq), v[int(-0.2*daDatos.freq)], 'o')
+                # plt.plot(len(v)-int(0.1*daDatos.freq), v[int(-0.1*daDatos.freq)], 'o')
+                # plt.plot(len(v)-int(.6*daDatos.freq), v[int(-.6*daDatos.freq)], 'o')
+                # plt.plot(len(v)-int(.5*daDatos.freq), v[int(-.5*daDatos.freq)], 'o')
+                
+                pes += 0.01
+                itera+=1
+                #print('iters=', itera, 'peso=', pes, 'v=', v[-1])
+            
+            
+        except:
+            print('No se encontró')
+            return np.asarray([np.nan, np.nan])
+        
+        if show:
+            plt.plot(v, lw=0.2, label='ajustado')
+            v = integra(data, t, peso) / (peso/9.8)
+            plt.plot(v, lw=0.2, label='raw')
+            plt.title('Cálculo iterativo')
+            plt.legend()
+            plt.show()
+            # plt.axhline(data[vent0:vent1].mean(), ls='--', lw=0.5)  
+            
+        return np.asarray([pes, peso-pes])
+    
+    """
+    #Con repe
+    data = daDatos[1,0].data
+    t = daDatos.time.data
+    peso = daPeso.sel(stat='media')[1,0].data
+    evIni = 'despegue'
+    evFin = 'finAnalisis'
+    ini = daEventos.sel(evento=evIni)[1,0].data
+    fin = daEventos.sel(evento=evFin)[1,0].data
+
+    #Sin repe
+    data = daDatos[1].data
+    t = daDatos.time.data
+    peso = daPeso.sel(stat='media')[1].data
+    evIni = 'despegue'
+    evFin = 'finAnalisis'
+    ini = daEventos.sel(evento=evIni)[1].data
+    fin = daEventos.sel(evento=evFin)[1].data
+    """
+    if tipo_calculo=='iter_gradiente':
+        f_calculo = peso_iter_gradiente
+        evIni = 'iniMov'
+        evFin = 'finMov'    
+    elif tipo_calculo=='iter_final':
+        f_calculo = peso_iter_final
+        evIni = 'despegue'
+        evFin = 'finAnalisis'
+    else:
+        raise(f'Método de cálculo {tipo_calculo} no implementado')
+
+    daPesoReturn = xr.apply_ufunc(f_calculo, daDatos, daDatos.time, daPeso.sel(stat='media'), daEventos.sel(evento=evIni), daEventos.sel(evento=evFin), margen, daDatos.ID, #daDatos.repe,
+                                    input_core_dims=[['time'], ['time'], [], [], [], [], []], #, []],
+                                    output_core_dims=[['stat']],
+                                    #exclude_dims=set(('time',)),
+                                    vectorize=True
+                                  ).assign_coords(stat=['media', 'resid'])
+    
+    if daPeso is not None:
+        daPesoReturn = xr.concat([daPesoReturn, daPeso.sel(stat='sd')], dim='stat')
+        daPesoReturn.loc[dict(stat='sd')] = daPeso.sel(stat='sd')
+ 
+    return daPesoReturn
 
 
 def afina_peso(daDatos, daEventos=None, daPeso=None, margen=0.005, tipo_calculo='opt', show=False):
@@ -2171,9 +2649,7 @@ def detecta_eventos_estandar(daDatos, daEventos=None, daPeso=None, tipo_test='CM
     
     if daEventos is None:
         daEventos = (xr.full_like(daDatos.isel(time=0).drop_vars('time'), np.nan)
-                     .expand_dims({'evento':['iniAnalisis', 'preactiv', 'iniPeso', 'finPeso', 'iniMov',
-                                             'maxFz', 'minFz', 'iniImpPos', 'maxFlex', 'finImpPos',
-                                             'despegue', 'aterrizaje', 'finMov', 'finAnalisis']},
+                     .expand_dims({'evento':eventos_basicos},
                                   axis=-1)
                     ).copy()
     
@@ -2193,14 +2669,14 @@ def detecta_eventos_estandar(daDatos, daEventos=None, daPeso=None, tipo_test='CM
     if tipo_test not in  ['DJ', 'SJPreac']:
         daEventos.loc[dict(evento='maxFlex')] = detecta_max_flex(daDatos, tipo_test=tipo_test, daPeso=daPeso, daEventos=daEventos)
     
-    #MaxFz, después de iniMov y despegue
+    #MaxFz, entre de iniMov y despegue
     daEventos.loc[dict(evento='maxFz')] = detecta_maxFz(daDatos, tipo_test=tipo_test, daPeso=daPeso, daEventos=daEventos)
         
-    #MinFz, después de iniMov y maxFlex
+    #MinFz, entre de iniMov y maxFlex
     daEventos.loc[dict(evento='minFz')] = detecta_minFz(daDatos, tipo_test=tipo_test, daPeso=daPeso, daEventos=daEventos, umbral=umbral)
     
     if 'preactiv' in daEventos.evento:
-        daEventos.loc[dict(evento='preactiv')] = daEventos.loc[dict(evento='iniMov')] - np.array(0.5)*daDatos.freq
+        daEventos.loc[dict(evento='preactiv')] = daEventos.loc[dict(evento='iniMov')] - np.array(0.5)*daDatos.freq #para calcular preactivación en ventana de 0.5 s
     
     return daEventos
 
@@ -2228,8 +2704,9 @@ def completar_en_grafica_xr(g, ajusta_inifin, daPeso, daEventos):
             
             
             if daPeso is not None: #isinstance(daPeso, xr.DataArray):
+                #Pasar pesos solamente cuando se grafiquen fuerzas absolutas
                 ax[i].axhline(daPeso.sel(dimensiones).sel(stat='media').data, color='C0', lw=0.7, ls='--', dash_capstyle='round', alpha=0.7)
-            
+                
             if isinstance(daEventos, xr.DataArray):
                 for ev in daEventos.sel(dimensiones):#.evento:
                     if ev.isnull().all():#np.isnan(ev): #si no existe el evento
@@ -2292,7 +2769,8 @@ def graficas_eventos(daDatos, daEventos=None, daPeso=None, n_en_bloque=4, show_i
     if ajusta_inifin:
         ini = daEventos.isel(evento=daEventos.argmin(dim='evento'))
         daDatos = recorta_ventana_analisis(daDatos, daEventos.sel(evento=['iniAnalisis', 'finAnalisis']))
-        daEventos = daEventos - daEventos.sel(evento='iniAnalisis')
+        if daEventos is not None:
+            daEventos = daEventos - daEventos.sel(evento='iniAnalisis')
         
         
     #Por si no hay dimensión 'repe'
@@ -2468,15 +2946,29 @@ def graficas_eventos(daDatos, daEventos=None, daPeso=None, n_en_bloque=4, show_i
     if nom_archivo_graf_global is not None:
         #pdf_pages.savefig(g.fig)
         pdf_pages.close()
-        print(f'Guardada la gráfica {nompdf}')
+        print(f'\nGuardada la gráfica {nompdf}')
     print('Creadas las gráficas en {0:.3f} s \n'.format(time.time()-timerGraf))
         
 
-def graficas_todas_variables(dsDatos, n_en_bloque=4, show_in_console=True, ajusta_inifin=False, ruta_trabajo=None, nom_archivo_graf_global=None):
+def graficas_todas_variables(dsDatos, show_eventos=False, daPeso=None, n_en_bloque=4, show_in_console=True, ajusta_inifin=False, ruta_trabajo=None, nom_archivo_graf_global=None):
+    """
+    Plots all variables in the dataset, with options for block size, console display,
+    adjustment, working directory, and global file name.
+    ajusta_inifin: si es True recorta según iniAnalisis y fin Analisis.
+    """
+    
+    if 'axis' in dsDatos.dims: #por si se envía un da filtrado por axis
+        dsDatos = dsDatos.sel(axis='z')
+
+    if n_en_bloque > len(dsDatos.ID):
+        n_en_bloque = len(dsDatos.ID)
+
     daDatos = dsDatos[['BW', 'v', 's', 'P']].to_array()
-    daEventos = dsDatos['events']
-    daPeso = dsDatos['peso']
-    daDatos.loc[dict(variable='P')] = daDatos.loc[dict(variable='P')] / daPeso.sel(stat='media')
+    
+    daEventos = dsDatos['events'] if 'events' in list(dsDatos.keys()) else None
+    daPeso = dsDatos['peso'] if 'peso' in list(dsDatos.keys()) else None
+    
+    #daDatos.loc[dict(variable='P')] = daDatos.loc[dict(variable='P')] / daPeso.sel(stat='media')
     
     timerGraf = time.time() #inicia el contador de tiempo
     print('\nCreando gráficas...')
@@ -2490,30 +2982,28 @@ def graficas_todas_variables(dsDatos, n_en_bloque=4, show_in_console=True, ajust
         nompdf = (ruta_trabajo / nom_archivo_graf_global).with_suffix('.pdf')
         pdf_pages = PdfPages(nompdf)
     
-    if 'axis' in daDatos.dims: #por si se envía un da filtrado por axis
-        daDatos=daDatos.sel(axis='z')
-    if daEventos is not None and 'axis' in daEventos.dims: #por si se envía un da filtrado por eje
-        daEventos=daEventos.sel(axis='z')
-    if daPeso is not None and 'axis' in daPeso.dims: #por si se envía un da filtrado por eje
-        daPeso=daPeso.sel(axis='z')
+    # if 'axis' in daDatos.dims: #por si se envía un da filtrado por axis
+    #     daDatos=daDatos.sel(axis='z')
+    # if daEventos is not None and 'axis' in daEventos.dims: #por si se envía un da filtrado por eje
+    #     daEventos=daEventos.sel(axis='z')
+    # if daPeso is not None and 'axis' in daPeso.dims: #por si se envía un da filtrado por eje
+    #     daPeso=daPeso.sel(axis='z')
 
 
     if ajusta_inifin:
         daDatos = recorta_ventana_analisis(daDatos, daEventos.sel(evento=['iniAnalisis', 'finAnalisis']))
-        daEventos = daEventos - daEventos.sel(evento='iniAnalisis')
+        if daEventos:# is not None:
+            daEventos = daEventos - daEventos.sel(evento='iniAnalisis')
     
        
     #Por si no hay dimensión 'repe'
     if 'repe' in daDatos.dims: #dfDatos.columns:
         fils_cols = dict(row='ID', col='repe')
-    else:
-        fils_cols = dict(col='ID', col_wrap=n_en_bloque)
-    
-    if 'repe' in daDatos.dims:
         distribuidor = n_en_bloque
     else:
+        fils_cols = dict(col='ID', col_wrap=n_en_bloque)
         distribuidor = n_en_bloque**2
-    
+       
     
     for n in range(0,len(daDatos.ID), distribuidor):
         dax = daDatos.isel(ID=slice(n, n + distribuidor))
@@ -3087,6 +3577,12 @@ def reset_F_vuelo_ejes_convencional(daDatos, tipo_test, umbral=20.0, pcto_ventan
 
 
 def calcula_variables(daDatos, daPeso=None, daEventos=None):
+    """
+    daEventos: recive el evento inicial y final para el cálculo. Se puede pasar
+               iniMov/finMov (para evitar derivas) o iniAnalisis/finAnalisis para
+               gráficas completas variables.
+    """
+    
     daBW = daDatos / daPeso.sel(stat='media').drop_vars('stat')
         
     #se puede integrar directamente con ufunc, pero no deja meter parámetro initial=0 y devuelve con un instante menos
@@ -3098,7 +3594,7 @@ def calcula_variables(daDatos, daPeso=None, daEventos=None):
             ini=int(ini)
             fin=int(fin)
             #plt.plot(data[ini:fin])
-            dat[ini:fin] = integrate.cumtrapz(data[ini:fin]-peso, time[ini:fin], initial=0)
+            dat[ini:fin] = integrate.cumulative_trapezoid(data[ini:fin]-peso, time[ini:fin], initial=0)
             #plt.plot(dat)
         except:
             print('Error calculando la integral')
@@ -3112,7 +3608,7 @@ def calcula_variables(daDatos, daPeso=None, daEventos=None):
     ini = daEventos[2,0].sel(evento='iniMov').data
     fin = daEventos[2,0].sel(evento='finMov').data
     plt.plot(data[int(ini):int(fin)])
-    """
+    """        
     daV = (xr.apply_ufunc(integra, daDatos, daDatos.time, daPeso.sel(stat='media'), daEventos.isel(evento=0), daEventos.isel(evento=1), #eventos 0 y 1 para que sirva con reversed, se pasa iniMov y finMov en el orden adecuado
                    input_core_dims=[['time'], ['time'], [], [], []],
                    output_core_dims=[['time']],
@@ -3161,7 +3657,11 @@ def calcula_results(daCinet=None, dsCinem=None, daPeso=None, daResults=None, daE
                                                     'hTVuelo', 'hVDespegue', 'hS',                                                    
                                                     'PMax', 'PMin',
                                                     'RFDMax', 'RFDMed',
-                                                    'impNegDescenso', 'ImpPositDescenso', 'ImpPositAscenso', 'ImpNegAscenso',]},
+                                                    'impNegDescenso', 'ImpPositDescenso', 'ImpPositAscenso', 'ImpNegAscenso',
+                                                    'tFzMax', 'tFzMin', 'tFzTransicion',
+                                                    'tVMax', 'tVMin', 'tSMax', 'tSMin', 'tPMax', 'tPMin', 
+                                                    'tRFDMax',
+                                                    ]},
                                           axis=-1)
                             ).copy()
     daResults.name = 'results'
@@ -3173,16 +3673,20 @@ def calcula_results(daCinet=None, dsCinem=None, daPeso=None, daResults=None, daE
     if 'axis' in daCinet.dims:
         daCinet = daCinet.sel(axis='z') #en principio solo interesa el eje z
     
-    #Tiempos
+    dsBatida = recorta_ventana_analisis(dsCinem[['BW', 'v', 's', 'P', 'RFD']], daEventos.sel(evento=['iniMov', 'despegue']))
+    dsAterrizaje = recorta_ventana_analisis(dsCinem[['BW', 'v', 's', 'P', 'RFD']], daEventos.sel(evento=['aterrizaje', 'finMov']))
+
+    #Tiempos de fase
     daResults.loc[dict(n_var='tFaseInicioDesc')] = (daEventos.sel(evento='iniImpPos') - daEventos.sel(evento='iniMov')) / dsCinem.freq
     daResults.loc[dict(n_var='tFaseExc')] = (daEventos.sel(evento='maxFlex') - daEventos.sel(evento='iniImpPos')) / dsCinem.freq
     daResults.loc[dict(n_var='tFaseConc')] = (daEventos.sel(evento='despegue') - daEventos.sel(evento='maxFlex')) / dsCinem.freq
     daResults.loc[dict(n_var='tVuelo')] = (daEventos.sel(evento='aterrizaje') - daEventos.sel(evento='despegue')) / dsCinem.freq
     
-    #Fuerzas
-    daResults.loc[dict(n_var='FzMax')] = recorta_ventana_analisis(daCinet, daEventos.sel(evento=['iniMov', 'despegue'])).max(dim='time')
-    daResults.loc[dict(n_var='FzMin')] = recorta_ventana_analisis(daCinet, daEventos.sel(evento=['iniMov', 'despegue'])).min(dim='time')
-    daResults.loc[dict(n_var='FzTransicion')] = daCinet.sel(time=daEventos.sel(evento='maxFlex')/dsCinem.freq, method='nearest')
+    #Fuerzas batida
+    daResults.loc[dict(n_var='FzMax')] = dsBatida['BW'].max(dim='time')#recorta_ventana_analisis(daCinet, daEventos.sel(evento=['iniMov', 'despegue'])).max(dim='time')
+    daResults.loc[dict(n_var='FzMin')] = dsBatida['BW'].min(dim='time')#recorta_ventana_analisis(daCinet, daEventos.sel(evento=['iniMov', 'despegue'])).min(dim='time')
+    daResults.loc[dict(n_var='FzTransicion')] = daCinet.sel(time=daEventos.sel(evento='maxFlex') / dsCinem.freq, method='nearest')
+    
     #Velocidades
     daResults.loc[dict(n_var='vDespegue')] = dsCinem['v'].sel(time=daEventos.sel(evento='despegue')/dsCinem.freq, method='nearest')
     daResults.loc[dict(n_var='vAterrizaje')] = dsCinem['v'].sel(time=daEventos.sel(evento='aterrizaje')/dsCinem.freq, method='nearest')
@@ -3204,11 +3708,11 @@ def calcula_results(daCinet=None, dsCinem=None, daPeso=None, daResults=None, daE
     daResults.loc[dict(n_var='hS')] = daResults.loc[dict(n_var='sMax')] - daResults.loc[dict(n_var='sDespegue')]
     
     #Potencias
-    daResults.loc[dict(n_var='PMax')] = recorta_ventana_analisis(dsCinem['P'], daEventos.sel(evento=['iniMov', 'despegue'])).max(dim='time')
-    daResults.loc[dict(n_var='PMin')] = recorta_ventana_analisis(dsCinem['P'], daEventos.sel(evento=['iniMov', 'despegue'])).min(dim='time')
+    daResults.loc[dict(n_var='PMax')] = dsBatida['P'].max(dim='time')#recorta_ventana_analisis(dsCinem['P'], daEventos.sel(evento=['iniMov', 'despegue'])).max(dim='time')
+    daResults.loc[dict(n_var='PMin')] = dsBatida['P'].min(dim='time')#recorta_ventana_analisis(dsCinem['P'], daEventos.sel(evento=['iniMov', 'despegue'])).min(dim='time')
     
     #RFD
-    daResults.loc[dict(n_var='RFDMax')] = recorta_ventana_analisis(dsCinem['RFD'], daEventos.sel(evento=['iniMov', 'despegue'])).max(dim='time')
+    daResults.loc[dict(n_var='RFDMax')] = dsBatida['RFD'].max(dim='time')#recorta_ventana_analisis(dsCinem['RFD'], daEventos.sel(evento=['iniMov', 'despegue'])).max(dim='time')
     daResults.loc[dict(n_var='RFDMed')] = (daCinet.sel(time=daEventos.sel(evento='maxFlex')/dsCinem.freq, method='nearest') - daCinet.sel(time=daEventos.sel(evento='minFz')/dsCinem.freq, method='nearest')) / ((daEventos.sel(evento='maxFlex') - daEventos.sel(evento='minFz'))/dsCinem.freq)
     
     #Impulsos. Como la fuerza viene en BW, el peso que resta es 1. Con fuerza en newtons restar daPeso.sel(stat='media').drop_vars('stat')
@@ -3217,6 +3721,17 @@ def calcula_results(daCinet=None, dsCinem=None, daPeso=None, daResults=None, daE
     daResults.loc[dict(n_var='ImpPositAscenso')] = integra_completo(daCinet - 1, daEventos=daEventos.sel(evento=['maxFlex', 'finImpPos']))
     daResults.loc[dict(n_var='ImpNegAscenso')] = integra_completo(daCinet - 1, daEventos=daEventos.sel(evento=['finImpPos', 'despegue']))
     
+    #Tiempos de eventos clave
+    daResults.loc[dict(n_var='tFzMax')] = dsBatida['BW'].argmax(dim='time') / dsCinem.freq
+    daResults.loc[dict(n_var='tFzMin')] = dsBatida['BW'].argmin(dim='time') / dsCinem.freq
+    daResults.loc[dict(n_var='tFzTransicion')] = (daEventos.sel(evento='maxFlex') - daEventos.sel(evento='iniMov')) / dsCinem.freq
+    daResults.loc[dict(n_var='tVMax')] = dsBatida['v'].argmax(dim='time') / dsCinem.freq
+    daResults.loc[dict(n_var='tVMin')] = dsBatida['v'].argmin(dim='time') / dsCinem.freq
+    daResults.loc[dict(n_var='tSMax')] = dsBatida['s'].argmax(dim='time') / dsCinem.freq
+    daResults.loc[dict(n_var='tSMin')] = dsBatida['s'].argmin(dim='time') / dsCinem.freq
+    daResults.loc[dict(n_var='tPMax')] = dsBatida['P'].argmax(dim='time') / dsCinem.freq
+    daResults.loc[dict(n_var='tPMin')] = dsBatida['P'].argmin(dim='time') / dsCinem.freq
+    daResults.loc[dict(n_var='tRFDMax')] = dsBatida['RFD'].argmax(dim='time') / dsCinem.freq
     
     return daResults
     
@@ -3274,13 +3789,11 @@ de fuerzas.
 class trata_fuerzas_saltos:
     def __init__(self, data: Optional[xr.DataArray]=xr.DataArray(),
                  tipo_test: Optional[str]='CMJ',
-                 eventos: Optional=None):
+                 eventos: Optional[None]=None): #funciona Optional[None]???
         self.data = data
         self.tipo_test = tipo_test
         self.eventos = (xr.full_like(self.data.isel(time=0).drop_vars('time'), np.nan)
-                         .expand_dims({'evento':['iniAnalisis', 'iniPeso', 'finPeso', 'iniMov',
-                                                 'maxFz', 'minFz', 'iniImpPos', 'maxFlex', 'finImpPos',
-                                                 'despegue', 'aterrizaje', 'finMov', 'finAnalisis']},
+                         .expand_dims({'evento':eventos_basicos},
                                       axis=-1)
                         ).copy()
         self.peso=None
@@ -3333,7 +3846,7 @@ if __name__ == "__main__":
             
                 
         import sys
-        sys.path.append('F:\Programacion\Python\Mios\Functions')
+        sys.path.append(r'F:\Programacion\Python\Mios\Functions')
         from filtrar_Butter import filtrar_Butter
 
         
@@ -3344,11 +3857,11 @@ if __name__ == "__main__":
         
         #Con C3D
         import sys
-        sys.path.append('F:\Programacion\Python\Mios\Functions')
+        sys.path.append(r'F:\Programacion\Python\Mios\Functions')
         import read_kistler_c3d as rkc3d
         da = rkc3d.read_kistler_c3d_xr(file)
-        da = rkc3d.separa_plataformas(da)
-        da = rkc3d.separa_ejes(da)
+        da = rkc3d.split_plataforms(da)
+        da = rkc3d.compute_forces_axes(da)
              
         
               
@@ -3393,9 +3906,7 @@ if __name__ == "__main__":
         
         
         daEventosForces = (xr.full_like(daCMJ.isel(time=0).drop_vars('time'), np.nan)
-                             .expand_dims({'evento':['iniAnalisis', 'preactiv', 'iniPeso', 'finPeso', 'iniMov',
-                                                     'maxFz', 'minFz', 'iniImpPos', 'maxFlex', 'finImpPos',
-                                                     'despegue', 'aterrizaje', 'finMov', 'finAnalisis']},
+                             .expand_dims({'evento':eventos_basicos},
                                           axis=-1)
                             ).copy()
         #Estima el ajuste del inicio y final del análisis
@@ -3441,7 +3952,7 @@ if __name__ == "__main__":
         # =============================================================================
         # %%     
         # =============================================================================
-        ruta_trabajo = Path('F:\Investigacion\Proyectos\Saltos\PotenciaDJ\Registros')
+        ruta_trabajo = Path(r'F:\Investigacion\Proyectos\Saltos\PotenciaDJ\Registros')
         nom_archivo_preprocesado = 'PotenciaDJ_Preprocesado'
         
         
@@ -3479,7 +3990,7 @@ if __name__ == "__main__":
     # =============================================================================
     # PRUEBAS COMO CLASE
     # =============================================================================
-    ruta_trabajo = Path('F:\Investigacion\Proyectos\Saltos\PotenciaDJ\Registros')
+    ruta_trabajo = Path(r'F:\Investigacion\Proyectos\Saltos\PotenciaDJ\Registros')
     nomArchivoPreprocesado = 'PotenciaDJ_Preprocesado'
     
     dj = trata_fuerzas_saltos(tipo_test='DJ')

@@ -199,7 +199,10 @@ class SliceTimeSeriesPhases():
               .rename({'n_event':'phase'})
               )
         da.attrs= self.data.attrs
-        da.time.attrs['units'] = self.data.time.attrs['units']
+        try:
+            da.time.attrs['units'] = self.data.time.attrs['units']
+        except:
+            pass
         
         return da
     
@@ -208,7 +211,7 @@ class SliceTimeSeriesPhases():
     # Custom function to adapt from Detecta detect_onset
     # =============================================================================
     def detect_onset_detecta_aux(data, event_ini=0, xSD=None, show=False, **args_func_events):
-        #Si se pasa como argumento corte_ini=1, coge el corte del final de cada ventana
+        #If event_ini=1 is passed as an argument, it takes the cut at the end of each window.
         try:
             from detecta import detect_onset
         except ImportError:		

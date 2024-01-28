@@ -18,12 +18,18 @@ except:
     pass
 #import scipy.signal
 
+import os
+
 __author__ = 'Jose Luis Lopez Elvira'
-__version__ = 'v.4.0.4'
-__date__ = '07/05/2023'
+__version__ = 'v.4.1.0'
+__date__ = '25/11/2023'
 
 """
 Modificaciones:
+    25/11/2023, v.4.1.0
+        - La función read_vicon_csv_pl_xr admite el parámetro to_dataarray 
+          para decidir si se devuelve un xr.DataArray o un polars dataframe.
+    
     07/05/2023, v.4.0.4
         - Mejorada lectura con polars
     
@@ -73,7 +79,10 @@ Modificaciones:
         - Con el argumento formatoxArray se puede pedir que devuelva los datos en formato xArray
 """
 
-def read_vicon_csv_pl_xr(file, section='Model Outputs', n_vars_load=None, coincidence='similar', sep=','):
+
+
+
+def read_vicon_csv_pl_xr(file, section='Model Outputs', n_vars_load=None, coincidence='similar', sep=',', to_dataarray=True):
     """
     Parameters
     ----------
@@ -91,6 +100,8 @@ def read_vicon_csv_pl_xr(file, section='Model Outputs', n_vars_load=None, coinci
         Options: 'similar', 'exact'. The default is 'similar'.
     sep : string, optional
         Separator used in the csv file. The default is ','.
+    to_dataarray : bool, optional
+        Transforms data to dataarray, otherway is polars dataframe. The default is True.
 
     Returns
     -------
@@ -106,13 +117,20 @@ def read_vicon_csv_pl_xr(file, section='Model Outputs', n_vars_load=None, coinci
     
     #Ensures that file is a csv file
     file = file.with_suffix('.csv')
-
+    
     #----Check for blank lines. In current Polars (0.17.2) line breaks do not match when starting with blank line
+    # Vicon Nexus writes a first empty line wuen export Events is selected but thre are no events
     with open(file, mode='rt') as f:
         offset_blank_ini = 0
-        
-        while f.readline() in [u'\r\n', u'\n', 'ï»¿\n']:
+        while f.readline() in [u'\r\n', u'\n', 'ï»¿\n', r'\n', '\ufeff']:
+            print('línea')
             offset_blank_ini += 1
+    #Second Check for blank lines (some times the previous one does not work)
+    if offset_blank_ini==0:
+        with open(file, mode='rt') as f:
+            line=f.readline()
+            if not any(filter(lambda x: x in line, ['Events', 'Trajectories', 'Model Outputs', 'Devices'])):
+                offset_blank_ini += 1
     
     #----Search section position and length
     with open(file, mode='rt') as f:
@@ -147,17 +165,18 @@ def read_vicon_csv_pl_xr(file, section='Model Outputs', n_vars_load=None, coinci
         
     
     #----Load data from file
-    pl.read_csv(file, truncate_ragged_lines=True)
+    #pl.read_csv(file, truncate_ragged_lines=True)
     df = pl.read_csv(file, has_header=True, skip_rows=ini_bloque+2-offset_blank_ini,
                      n_rows=fin_bloque-ini_bloque-2,
-                     truncate_ragged_lines=True
+                     truncate_ragged_lines=True,
+                     separator=sep,
                      #columns=range(len(n_vars_merged)),
                      #new_columns=n_vars_merged, separator=sep
                      )
+        
     n_head = df.columns
     n_subhead = list(np.char.lower(df.slice(0,1).to_numpy()[0].astype(str)))
     
-    #TODO: SIPLIFY WITH skip_rows_after_header=1?
     #Remove subhead and units rows
     df = df.slice(2, None)
     
@@ -233,47 +252,57 @@ def read_vicon_csv_pl_xr(file, section='Model Outputs', n_vars_load=None, coinci
         
     
     #----Transform polars to xarray
-    if section in ['Trajectories', 'Model Outputs', 'Forces']:
-        #Decompose on its axes
-        x = df.select(pl.col('^*x$')).to_numpy() #los que acaban en la coordenada o si están repetidos 
-        y = df.select(pl.col('^*y$')).to_numpy()
-        z = df.select(pl.col('^*z$')).to_numpy()        
-        data = np.stack([x,y,z])
+    if to_dataarray:
+        if section in ['Trajectories', 'Model Outputs', 'Forces']:
+            #Decompose on its axes
+            x = df.select(pl.col('^*x$')).to_numpy()
+            y = df.select(pl.col('^*y$')).to_numpy()
+            z = df.select(pl.col('^*z$')).to_numpy()        
+            data = np.stack([x,y,z])
+            
+            ending = -3 if section == 'Forces' else -2
+            coords={'axis' : ['x', 'y', 'z'],
+                    'time' : np.arange(data.shape[1]) / freq,
+                    'n_var' : [x[:ending] for x in df.columns if 'x' in x[-1]],
+                    }
+            da = (xr.DataArray(data=data,
+                            dims=coords.keys(),
+                            coords=coords,
+                            )
+                .astype(float)
+                .transpose('n_var', 'axis', 'time')
+                )
         
-        ending = -3 if section == 'Forces' else -2
-        coords={'axis' : ['x', 'y', 'z'],
-                'time' : np.arange(data.shape[1]) / freq,
-                'n_var' : [x[:ending] for x in df.columns if 'x' in x[-1]],
-                }
-        da = (xr.DataArray(data=data,
-                          dims=coords.keys(),
-                          coords=coords,
-                          )
-             .astype(float)
-             .transpose('n_var', 'axis', 'time')
-             )
-    
-    elif section in ['EMG', 'Model Outputs EMG']:
-        data = df.to_numpy().T
-        coords={'n_var' : df.columns,#selection2,
-                'time' : np.arange(df.shape[0]) / freq,                
-                }
-        da = xr.DataArray(data=data,
-                          dims=coords.keys(),
-                          coords=coords,
-                         ).astype(float)
-    
-    
-    da.name = section
-    da.attrs['freq'] = freq
-    da.time.attrs['units'] = 's'
-    if section == 'Trajectories':
-        da.attrs['units'] = 'mm'
-    elif 'EMG' in section:
-        da.attrs['units'] = 'V'
-    elif 'Forces' in section:
-        da.attrs['units'] = 'N'
-    return da
+        elif section in ['EMG', 'Model Outputs EMG']:
+            data = df.to_numpy().T
+            coords={'n_var' : df.columns,#selection2,
+                    'time' : np.arange(df.shape[0]) / freq,                
+                    }
+            da = xr.DataArray(data=data,
+                            dims=coords.keys(),
+                            coords=coords,
+                            ).astype(float)
+        
+        
+        da.name = section
+        da.attrs['freq'] = freq
+        da.time.attrs['units'] = 's'
+        if section == 'Trajectories':
+            da.attrs['units'] = 'mm'
+        elif 'EMG' in section:
+            da.attrs['units'] = 'V'
+        elif 'Forces' in section:
+            da.attrs['units'] = 'N'
+
+        return da
+    else: #keep Polars dataframe format
+        #Add time column
+        df = df.with_columns(        
+                            pl.lit(np.arange(len(df)) / freq).alias('time'),
+                            #pl.all()
+                            )
+        
+        return df
 
 
 
@@ -603,18 +632,18 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
             var = [s.split('- ')[-1] for s in nomVars]
             coord = nomCols[:len(nomVars)]
             dfReturn.columns = var
-            dimensiones=['nom_var', 'time']
-            var_name=['nom_var']
+            dimensiones=['n_var', 'time']
+            var_name=['n_var']
             
     else:
         var = ['_'.join(s.split('_')[:-1]) for s in nomVars[:len(nomVars)]] #gestiona si la variable tiene separador '_', lo mantiene
         coord = [s.split(':')[-1].lower() for s in nomCols[:len(nomVars)]] #pasa coordenadas a minúscula
-        dfReturn.columns = pd.MultiIndex.from_tuples(list(zip(*[var,coord])), names=['nom_var', 'eje'])
+        dfReturn.columns = pd.MultiIndex.from_tuples(list(zip(*[var,coord])), names=['n_var', 'axis'])
         #Elimina columnas con variables modeladas EMG si las hay
         dfReturn = dfReturn.drop(columns=dfReturn.filter(regex='emg'))
         #dfReturn.duplicated().sum()
-        dimensiones = ['nom_var', 'eje', 'time']
-        var_name=['nom_var', 'eje']
+        dimensiones = ['n_var', 'axis', 'time']
+        var_name=['n_var', 'axis']
         
     
     #dfReturn.columns=[var, coord]
@@ -627,7 +656,7 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
         #if nomBloque == 'Devices':
         #    dfReturn.columns = dfReturn.columns.droplevel(1)
 
-        #dfReturn.iloc[:,2:].melt(id_vars='time', var_name=['nom_var', 'eje']).set_index(dimensiones).to_xarray().to_array()
+        #dfReturn.iloc[:,2:].melt(id_vars='time', var_name=['n_var', 'axis']).set_index(dimensiones).to_xarray().to_array()
 
 #TODO: Arreglar esto que no funciona pasar a xarray
         daReturn = (dfReturn.iloc[:,2:]
@@ -651,7 +680,7 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
     #Si hace falta lo pasa a xArray
     if False:#formatoxArray:
         #prueba para hacerlo directamente desde dataframe
-        #dfReturn.assign(**{'time':np.arange(len(dfReturn))/frec}).drop(columns='').melt(id_vars='time').set_index(['nom_var', 'eje', 'time']).to_xarray().to_array()
+        #dfReturn.assign(**{'time':np.arange(len(dfReturn))/frec}).drop(columns='').melt(id_vars='time').set_index(['n_var', 'axis', 'time']).to_xarray().to_array()
         
         if header_format!='flat':
             dfReturn.columns = dfReturn.columns.map('_'.join).str.strip()
@@ -663,24 +692,24 @@ def read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', separador=',', retu
         data=np.stack([x,y,z])
         
         #Quita el identificador de la coordenada del final
-        nom_vars = dfReturn.filter(regex='|'.join(['_x','_X'])).columns.str.rstrip('|'.join(['_x','_X']))
+        n_vars = dfReturn.filter(regex='|'.join(['_x','_X'])).columns.str.rstrip('|'.join(['_x','_X']))
         
         time = np.arange(x.shape[1]) / frecuencia
         coords = {}
-        coords['eje'] = ['x', 'y', 'z']
-        coords['nom_var'] = nom_vars
+        coords['axis'] = ['x', 'y', 'z']
+        coords['n_var'] = n_vars
         coords['time'] = time
         
         daReturn=xr.DataArray(
                     data=data,
-                    dims=('eje', 'nom_var', 'time'),
+                    dims=('axis', 'n_var', 'time'),
                     coords=coords,
                     name=nomBloque,
                     attrs={'frec':frecuencia}
                     #**kwargs,
                 )
         if header_format!='flat': #si hace falta lo vuelve a poner como multiindex
-            dfReturn.columns=pd.MultiIndex.from_tuples(list(zip(*[var,coord])), names=['nom_var', 'eje'])
+            dfReturn.columns=pd.MultiIndex.from_tuples(list(zip(*[var,coord])), names=['n_var', 'axis'])
     
             
     
@@ -745,18 +774,18 @@ if __name__ == '__main__':
     nombreArchivo = Path(ruta_Archivo)    
     dfDatos, daDatos1 = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', formatoxArray=True)
     dfDatos['Right_Toe_z'].plot()
-    daDatos1.sel(nom_var='Right_Toe', eje='z').plot.line()
+    daDatos1.sel(n_var='Right_Toe', axis='z').plot.line()
     daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Trajectories')
     daDatos.sel(n_var='Right_Toe', axis='z').plot.line()
     
     
     dfDatos, daDatos = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', formatoxArray=True)
     dfDatos['AngArtLKnee_x'].plot()
-    daDatos.sel(nom_var='AngArtLKnee', eje='x').plot.line()
+    daDatos.sel(n_var='AngArtLKnee', axis='x').plot.line()
 
     dfDatos, daDatos = read_vicon_csv(nombreArchivo, nomBloque='Model Outputs', formatoxArray=True, header_format='multi')
     dfDatos['AngArtLKnee'].plot()
-    daDatos.sel(nom_var='AngArtLKnee').plot.line(x='time')
+    daDatos.sel(n_var='AngArtLKnee').plot.line(x='time')
     
     
     
@@ -768,11 +797,11 @@ if __name__ == '__main__':
     
     dfDatos, daDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', formatoxArray=True, returnFrec=True)
     dfDatos.plot()
-    daDatos.sel(eje='x').plot.line(x='time', hue='nom_var')
+    daDatos.sel(axis='x').plot.line(x='time', hue='n_var')
     
     dfDatos, daDatos, frecuencia = read_vicon_csv(nombreArchivo, nomBloque='Trajectories', formatoxArray=True, returnFrec=True, header_format='multi')
     dfDatos.plot(x='time')
-    daDatos.sel(eje='x').plot.line(x='time', hue='nom_var')
+    daDatos.sel(axis='x').plot.line(x='time', hue='n_var')
     
     daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='Trajectories')
     daDatos.sel(axis='x').plot.line(x='time')
@@ -805,7 +834,7 @@ if __name__ == '__main__':
     dfDatosFlat = read_vicon_csv(nombreArchivo, nomBloque='Devices', header_format='multi')
     dfDatosMulti, daDatos, frec = read_vicon_csv(nombreArchivo, nomBloque='Devices', header_format='multi', returnFrec=True, formatoxArray=True)
     dfDatosFlat['EMG1'].plot()
-    daDatos.sel(nom_var='EMG1').plot(x='time')
+    daDatos.sel(n_var='EMG1').plot(x='time')
     
     daDatos = read_vicon_csv_pl_xr(nombreArchivo, section='EMG')
     daDatos.sel(n_var=daDatos.n_var.str.endswith('EMG1')).plot(x='time')
