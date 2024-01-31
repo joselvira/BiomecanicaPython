@@ -5,7 +5,7 @@ Created on Tue Aug  2 20:33:55 2022
 @author: josel
 """
 # =============================================================================
-# %%---- IMPORTA LIBRERIAS
+# %% IMPORTA LIBRERIAS
 # =============================================================================
 
 from __future__ import annotations
@@ -236,7 +236,10 @@ def integra_completo(daDatos, daEventos):
                            )
     return daInt
 
-def RMS(daDatos, ventana):
+def RMS(daDatos, ventana):  
+    """
+    Calcula RMS en dataarray indicando ventana
+    """  
     def rms(data):
         if np.count_nonzero(~np.isnan(data))==0:
             return np.array(np.nan)
@@ -450,8 +453,26 @@ def separa_dim_axis(da):
     return da
 
 
+
+def carga_peso_bioware_csv(file):
+    peso=0.0
+    with open(file, mode='rt') as f:
+        num_lin = 0
+                   
+        #Scrolls through the entire file to find the start and end of the section and the number of lines
+        for linea in f:
+            num_lin+=1
+            #Search for section start label
+            if 'Normalized force (N):' in linea:
+                peso = float(linea.split('\t')[1])
+                break            
+            num_lin+=1
+    if peso==0.0:
+        print('No se encontro la etiqueta de peso en el archivo')
+    return peso
+
 #Carga un archivo de Bioware como dataframe de Polars
-def carga_bioware_pl(file, lin_header=17, n_vars_load=None):
+def carga_bioware_pl(file, lin_header=17, n_vars_load=None, to_dataarray=False):
     df = (pl.read_csv(file, has_header=True, skip_rows=lin_header, skip_rows_after_header=1, columns=n_vars_load, separator='\t')#, columns=nom_vars_cargar)
                 #.slice(1, None) #quita la fila de unidades (N) #no hace falta con skip_rows_after_header=1
                 #.select(pl.col(n_vars_load))
@@ -460,6 +481,32 @@ def carga_bioware_pl(file, lin_header=17, n_vars_load=None):
                 #          })
                 ).with_columns(pl.all().cast(pl.Float64()))
     
+    #----Transform polars to xarray
+    if to_dataarray:
+        x = df.select(pl.col('^*Fx$')).to_numpy()
+        y = df.select(pl.col('^*Fy$')).to_numpy()
+        z = df.select(pl.col('^*Fz$')).to_numpy()        
+        data = np.stack([x,y,z])
+        freq = 1  / (df[1, 'abs time (s)'] - df[0, 'abs time (s)'])
+        ending = -3
+        coords={'axis' : ['x', 'y', 'z'],
+                'time' : np.arange(data.shape[1]) / freq,
+                'n_var' : ['Force'], #[x[:ending] for x in df.columns if 'x' in x[-1]],
+                }
+        da = (xr.DataArray(data=data,
+                        dims=coords.keys(),
+                        coords=coords,
+                        )
+            .astype(float)
+            .transpose('n_var', 'axis', 'time')
+            )
+        da.name = 'Forces'
+        da.attrs['freq'] = freq
+        da.time.attrs['units'] = 's'
+        da.attrs['units'] = 'N'
+
+        return da
+
     return df
 
 #Carga un archivo Bioware C3D a xarray
@@ -623,14 +670,14 @@ def load_merge_bioware_pl(ruta, n_vars_load=None, estudio=None, data_type=None, 
     if data_type is None:
         data_type = float
         
-    lista_archivos = sorted(list(ruta.glob('*.txt')))#'**/*.txt' incluye los que haya en subcarpetas
+    lista_archivos = sorted(list(ruta.glob('**/*.txt')))#'**/*.txt' incluye los que haya en subcarpetas
     lista_archivos = [x for x in lista_archivos if 'error' not in  x.name] #selecciona archivos
     
     if n_vars_load is None: #si no vienen impuestas las columnas a cargar
         n_vars_load = ['abs time (s)'] #, 'Fx', 'Fy', 'Fz']
-        if n_vars_load !=2: #in [0,1]:
+        if merge_2_plats !=2: #in [0,1]:
             n_vars_load += ['Fx', 'Fy', 'Fz'] #['Fx.1', 'Fy.1', 'Fz.1']
-            if n_vars_load != 1:
+            if merge_2_plats != 1:
                 n_vars_load += ['Fx_duplicated_0', 'Fy_duplicated_0', 'Fz_duplicated_0'] #['Fx.1', 'Fy.1', 'Fz.1']
         else:
             n_vars_load += ['Fx_duplicated_0', 'Fy_duplicated_0', 'Fz_duplicated_0'] #['Fx.1', 'Fy.1', 'Fz.1']
@@ -3888,9 +3935,9 @@ if __name__ == "__main__":
         xr.set_options(keep_attrs=True)
         visual_bloque_particip = slice(None) #[16,17] #nº de participantes para generar gráficas de visualización. EMPIEZA EN CERO
 
-        nom_archivo_preprocesado = Path('F:/Investigacion/Proyectos/Saltos/MasterPracticas/data-science-template-main_SaltosMasterPracticas/data/processed/SaltosMasterPrac_CMJ_Trimmed.nc')
+        nom_archivo_preprocesado = Path(r'F:/Investigacion/Proyectos/Saltos/MasterPracticas/data-science-template-main_SaltosMasterPracticas/data/processed/SaltosMasterPrac_CMJ_Trimmed.nc')
                 
-        sys.path.append('F:/Investigacion/Proyectos/Saltos/MasterPracticas')
+        sys.path.append(r'F:/Investigacion/Proyectos/Saltos/MasterPracticas')
         daCMJ = xr.load_dataarray(nom_archivo_preprocesado)
         
         
@@ -3981,7 +4028,7 @@ if __name__ == "__main__":
     
     
     
-
+        
 
 
 
