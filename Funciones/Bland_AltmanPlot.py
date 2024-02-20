@@ -7,15 +7,18 @@ Created on Mon Apr 26 17:02:27 2017
 
 from __future__ import division, print_function #division #Ensure division returns float
 
-import matplotlib.pyplot as plt
 import numpy as np
-from scipy import stats
 import pandas as pd
+
+from scipy import stats
+
+import matplotlib.pyplot as plt
 
 
 __author__ = 'Jose Luis Lopez Elvira'
 __version__ = '1.1.4'
 __date__ = '18/03/2021'
+
 
 #%%
 def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcrit_Exacto=False, n_decimales=1, ax=None, show_text=None, show_bias_LOA=False, color_lin=None, *args, **kwargs):
@@ -60,6 +63,9 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
 
     Version history
     ---------------
+    '1.1.5', 12/07/2023
+            Corregido error al calcular regresión cuando todas las x son iguales.
+    
     '1.1.4':
             Añadido el argumento n_decimales para poder especificar el número de decimales cuando muesra el BIAS y LOA.
     
@@ -108,7 +114,7 @@ def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcri
     #dibuja los puntos
     ax.scatter(mean, diff, zorder=2, *args, **kwargs)
     
-    if regr!=0:        
+    if regr!=0 and sum(mean)!=0.0:
         import seaborn as sns
                 
         #linear regresion
@@ -259,7 +265,7 @@ if __name__ == '__main__':
     #Se puede pedir que etiquete cada caso para poder identificarlos
     bland_altman_plot(instr1, instr2, etiquetaCasos=True, color='b', show_bias_LOA=True)
     
-    #También puede calcular si existe tendendia en los datos. Presenta la R2 y Pearson
+    #También puede calcular si existe tendencia en los datos. Presenta la R2 y Pearson
     bland_altman_plot(instr1, instr2, regr=1, color='b', show_bias_LOA=True)
     
     #para poder controlar el aspecto de los ejes, etiquetas, etc. incluirlo en una figura
@@ -272,7 +278,7 @@ if __name__ == '__main__':
     ax.set_ylim([-30,30])
     plt.show()
     
-    #También puede calcular si existe tendendia en los datos. El número pasado en regs se utiliza como exponente de la línea de regresión utilizada.
+    #También puede calcular si existe tendencia en los datos. El número pasado en regs se utiliza como exponente de la línea de regresión utilizada.
     #Presenta Pearson y p de la correlación lineal y la R2 de la regresión del polinomio con exponente indicado
     bland_altman_plot(instr1, instr2, regr=1, color='b', show_bias_LOA=True)
     bland_altman_plot(instr1, instr2, regr=2, color='b', show_bias_LOA=True)

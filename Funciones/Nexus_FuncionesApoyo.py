@@ -709,6 +709,40 @@ def calcula_angulos_articulaciones(dsRlG, modelo_completo=False, verbose=False):
     return dsAngles
 
 
+def calcula_angulos_desde_trajec(daData, modelo_completo=False, verbose=False):
+    """
+    Calcula ángulos de articulaciones a partir de las trayectorias.
+    Paso intermedio de calcular matrices de rotación
+    """
+    print('Calculando matrices de rotación...')
+    dsRlG = calcula_bases(daData, modelo_completo) #daData=daDatos.isel(ID=0))
+
+    print('Calculando ángulos de segmentos...')
+    dsAngSegments = calcula_angulos_segmentos(dsRlG, verbose=verbose)
+    
+    print('Calculando ángulos articulares...')
+    dsAngArtics = calcula_angulos_articulaciones(dsRlG, modelo_completo, verbose=verbose)
+    #dsAngArtics['AngArtHip_L'].plot.line(x='time', row='ID', hue='axis')
+    
+    
+
+    daAngles = (xr.merge([dsAngSegments, dsAngArtics])
+                .to_array() #.to_dataarray()
+                .rename({'variable': 'n_var'})
+                )
+    
+    
+    if 'side' in daData.coords:
+        daAngles = separa_trayectorias_lados(daAngles)
+
+    daAngles.name = 'Angles'
+    daAngles.attrs['units'] = 'deg'
+    daAngles.attrs['freq'] = daData.freq
+
+    #daAngles.sel(n_var='AngArtHip').plot.line(x='time', row='ID', col='axis', hue='side')
+    
+
+    return daAngles
     
 
 def ajusta_etiquetas_lado_final(daDatos):
@@ -866,7 +900,7 @@ def carga_variables_nexus_Trajectories(vicon=None, n_vars=None):
                      )
     
     da.name='Trajectories'
-    da.attrs['frec'] = float(vicon.GetFrameRate())
+    da.attrs['freq'] = float(vicon.GetFrameRate())
     da.attrs['units'] = 'mm'
     da.time.attrs['units'] = 's'
    
@@ -880,7 +914,7 @@ def carga_variables_nexus_force(vicon=None, n_plate=None):
     
     deviceForce = [x for x in vicon.GetDeviceNames() if n_plate in x][0]
     deviceID = vicon.GetDeviceIDFromName(deviceForce)
-    _,_,frecForce, outputIDs,_,_ = vicon.GetDeviceDetails(deviceID)
+    _,_,freqForce, outputIDs,_,_ = vicon.GetDeviceDetails(deviceID)
     
     #Coge los nombres de los canales
     cols = [vicon.GetDeviceOutputDetails(deviceID, outputIDs[i]) for i in range(len(outputIDs))]
@@ -894,7 +928,7 @@ def carga_variables_nexus_force(vicon=None, n_plate=None):
     data = np.expand_dims(np.array(ejes), axis=0) #añade una dimensión para el ID
     coords={'ID': [vicon.GetSubjectNames()[0]],
             'axis' : ['x', 'y', 'z'],
-            'time' : np.arange(0, data.shape[-1])/frecForce
+            'time' : np.arange(0, data.shape[-1])/freqForce
             }
     da = xr.DataArray(data=data,
                       dims=coords.keys(),
@@ -905,7 +939,7 @@ def carga_variables_nexus_force(vicon=None, n_plate=None):
     
     
     da.name='Force'
-    da.attrs['freq'] = float(frecForce)
+    da.attrs['freq'] = float(freqForce)
     da.attrs['freq_ref'] = vicon.GetFrameRate() #frequency of markers
     da.attrs['units'] = 'N'
     da.time.attrs['units'] = 's'
@@ -922,7 +956,7 @@ def carga_variables_nexus_EMG(vicon=None, n_vars=None):
     deviceEMG = [x for x in vicon.GetDeviceNames() if 'EMG' in x][0]
     deviceID = vicon.GetDeviceIDFromName(deviceEMG)
         
-    _,_,frecEMG, outputIDs,_,_ = vicon.GetDeviceDetails(deviceID)
+    _,_,freqEMG, outputIDs,_,_ = vicon.GetDeviceDetails(deviceID)
         
     #dir(ViconNexus.ViconNexus)
     #help(ViconNexus.ViconNexus.GetDeviceChannelIDFromName)
@@ -944,7 +978,7 @@ def carga_variables_nexus_EMG(vicon=None, n_vars=None):
     data = np.expand_dims(np.array(channel), axis=0) #añade una dimensión para el ID
     coords={'ID': [vicon.GetSubjectNames()[0]],
             'channel' : cols,
-            'time' : np.arange(0, data.shape[-1])/frecEMG
+            'time' : np.arange(0, data.shape[-1])/freqEMG
             }
     da = xr.DataArray(data=data,
                       dims=coords.keys(),
@@ -969,7 +1003,7 @@ def carga_variables_nexus_EMG(vicon=None, n_vars=None):
     
     da = da*1000 #pasa a milivoltios
     da.name='EMG'
-    da.attrs['freq'] = float(frecEMG)
+    da.attrs['freq'] = float(freqEMG)
     da.attrs['freq_ref'] = vicon.GetFrameRate() #frequency of markers
     da.attrs['units'] = 'mV'
     da.time.attrs['units'] = 's'
@@ -1032,7 +1066,7 @@ def carga_trayectorias_c3d(lista_archivos, nom_vars_cargar=None):
             with open(file, 'rb') as handle:
                 reader = c3d.Reader(handle)
                     
-                frec = reader.point_rate
+                freq = reader.point_rate
                                 
                 points = []
                 for i, (_, p, _) in enumerate(reader.read_frames()):
@@ -1054,12 +1088,12 @@ def carga_trayectorias_c3d(lista_archivos, nom_vars_cargar=None):
             da = xr.DataArray(data=np.expand_dims(data, axis=0)/10, #pasado a centímetros
                               dims=('ID', 'time', 'n_var', 'axis'),
                               coords={'ID': [file.parent.parts[-2]+'_'+file.stem],
-                                      'time': (np.arange(0,data.shape[0])/frec),
+                                      'time': (np.arange(0,data.shape[0])/freq),
                                       'n_var': (n_var_nuevo),
                                       'axis': (['x','y','z'])
                                       },
                               name='Trayectorias',
-                              attrs={'frec': frec,
+                              attrs={'freq': freq,
                                      'units': 'cm',}
                               ).transpose('ID', 'n_var', 'axis', 'time')
             da.time.attrs['units']='s'
@@ -1275,8 +1309,8 @@ def carga_preprocesa_csv_cinem(listaArchivos, nom_vars_cargar=None, nomArchivoPr
         try:
             timerSub = time.time() #inicia el contador de tiempo
             print('Cargando archivo: {0:s}'.format(file.name))
-            dfprovis, frec = read_vicon_csv(file, nomBloque='Model Outputs', returnFrec=True, header_format='noflat')
-            #dfprovis, daprovis, frec = read_vicon_csv(file, nomBloque='Model Outputs', returnFrec=True, formatoxArray=True)
+            dfprovis, freq = read_vicon_csv(file, nomBloque='Model Outputs', returnFreq=True, header_format='noflat')
+            #dfprovis, daprovis, freq = read_vicon_csv(file, nomBloque='Model Outputs', returnFreq=True, formatoxArray=True)
             
             dfprovis = (dfprovis.loc[:, ~dfprovis.columns.duplicated()] #quita duplicados (aparecen en centros articulares)
                         .rename(columns=renombrar_vars)#, inplace=True)
@@ -1301,18 +1335,18 @@ def carga_preprocesa_csv_cinem(listaArchivos, nom_vars_cargar=None, nomArchivoPr
             if dfprovis['AngBiela']['y'].isnull()[0]: #comprueba si el primer valor es nulo, y le asigna un valor siguiendo la tendencia
                 dfprovis.loc[0,('AngBiela','y')] = dfprovis.loc[1,('AngBiela','y')] - (dfprovis.loc[2,('AngBiela','y')]-dfprovis.loc[1,('AngBiela','y')])
             AngBielaUnwrap = np.unwrap(dfprovis[('AngBiela','y')])
-            vAngBiela = np.gradient(AngBielaUnwrap)/(1/frec)
+            vAngBiela = np.gradient(AngBielaUnwrap)/(1/freq)
             """
             
             #Añade columna ID y time
             dfprovis.insert(0, 'ID', [file.parent.parts[-2]+'_'+file.stem]*len(dfprovis))
-            dfprovis.insert(1, 'time', np.arange(len(dfprovis))[0:len(dfprovis)]/frec) #la parte final es para asegurarse de que se queda con el tamaño adecuado
+            dfprovis.insert(1, 'time', np.arange(len(dfprovis))[0:len(dfprovis)]/freq) #la parte final es para asegurarse de que se queda con el tamaño adecuado
             
             dfTodosArchivos.append(dfprovis)
             
             # dfTodosArchivos.append(dfprovis.assign(**{'ID' : file.parent.parts[-2]+'_'+file.stem, #adaptar esto según la estructura de carpetas
             #                                           #'vAngBiela' : vAngBiela,
-            #                                           'time' : np.arange(0, len(dfprovis)/frec, 1/frec)[0:len(dfprovis)] #la parte final es para asegurarse de que se queda con el tamaño adecuado
+            #                                           'time' : np.arange(0, len(dfprovis)/freq, 1/freq)[0:len(dfprovis)] #la parte final es para asegurarse de que se queda con el tamaño adecuado
             #                                          }))#.reset_index(drop=True))
             
             print('Tiempo {0:.3f} s \n'.format(time.time()-timerSub))
@@ -1409,7 +1443,7 @@ def carga_preprocesa_csv_cinem(listaArchivos, nom_vars_cargar=None, nomArchivoPr
     daTodos = daTodos.assign_coords(test=('ID', daTodos.ID.to_series().str.split('_').str[-1].str.split('-').str[0]))
    
     daTodos.name='Cinem'    
-    daTodos.attrs['frec'] = float(frec)
+    daTodos.attrs['freq'] = float(freq)
     daTodos.attrs['units'] = 'deg'
     daTodos.time.attrs['units'] = 's'
     
@@ -1451,7 +1485,7 @@ def carga_preprocesa_c3d_cinem(listaArchivos, nom_vars_cargar=None):
             with open(file, 'rb') as handle:
                 reader = c3d.Reader(handle)
                     
-                frec=reader.point_rate
+                freq=reader.point_rate
                                 
                 points = []
                 for i, (_, p, _) in enumerate(reader.read_frames()):
@@ -1469,11 +1503,11 @@ def carga_preprocesa_c3d_cinem(listaArchivos, nom_vars_cargar=None):
                               dims=('ID', 'n_var', 'time'),
                               coords={'ID': [file.parent.parts[-2]+'_'+file.stem],
                                       'n_var': (labels),
-                                      'time': (np.arange(0,data.shape[1])/frec),
+                                      'time': (np.arange(0,data.shape[1])/freq),
                                       
                                       },
                               name='Cinem',
-                              attrs={'frec': float(frec),
+                              attrs={'freq': float(freq),
                                      'units': 'deg',}                              
                               )
             da.time.attrs['units']='s'
@@ -1525,7 +1559,7 @@ def carga_preprocesa_c3d_cinem(listaArchivos, nom_vars_cargar=None):
 
 
 #------------------------------
-def carga_preprocesa_csv_EMG_pl_xr(listaArchivos, nom_vars_cargar=None, nomBloque='Devices', frecEMG=None):
+def carga_preprocesa_csv_EMG_pl_xr(listaArchivos, nom_vars_cargar=None, nomBloque='Devices', freqEMG=None):
     #Versión Polars SIN TERMINAR DE ADAPTAR!
     print('Cargando los archivos...')
     timer = time.time() #inicia el contador de tiempo
@@ -1558,25 +1592,25 @@ def carga_preprocesa_csv_EMG_pl_xr(listaArchivos, nom_vars_cargar=None, nomBloqu
             elif nomBloque=='Model Outputs':
                 #Añade el ángulo de la biela para lado L y R interpolando de marcadores a EMG
                 angBiela = dfprovis['AngBiela']['y']
-                angBiela = np.interp(np.arange(len(dfprovis)*frecEMG/frec)/frecEMG, np.arange(len(angBiela))/frec, angBiela) 
+                angBiela = np.interp(np.arange(len(dfprovis)*freqEMG/freq)/freqEMG, np.arange(len(angBiela))/freq, angBiela) 
                 
                 dPedal_z = dfprovis['PosPedal_R']['z'] - dfprovis['PosPedal_L']['z']
-                dPedal_z = np.interp(np.arange(len(dfprovis)*frecEMG/frec)/frecEMG, np.arange(len(dPedal_z))/frec, dPedal_z)
+                dPedal_z = np.interp(np.arange(len(dfprovis)*freqEMG/freq)/freqEMG, np.arange(len(dPedal_z))/freq, dPedal_z)
                 
                 dfprovis = pd.DataFrame(np.asarray([angBiela,angBiela, dPedal_z,dPedal_z]).T, columns=['AngBiela_L', 'AngBiela_R', 'dPedal_z_L', 'dPedal_z_R'])
-                frec = frecEMG
+                freq = freqEMG
             
             #Añade columna ID y time
             dfprovis.insert(0, 'ID', [file.parent.parts[-2]+'_'+file.stem]*len(dfprovis))
             #dfprovis.insert(0, 'ID', [file.stem]*len(dfprovis))
             if 'time' not in dfprovis.columns:
-                dfprovis.insert(1, 'time', np.arange(len(dfprovis))[0:len(dfprovis)]/frec) #la parte final es para asegurarse de que se queda con el tamaño adecuado
+                dfprovis.insert(1, 'time', np.arange(len(dfprovis))[0:len(dfprovis)]/freq) #la parte final es para asegurarse de que se queda con el tamaño adecuado
             
             dfTodosArchivos.append(dfprovis)
             
             # dfTodosArchivos.append(dfprovis.assign(**{'ID' : file.parent.parts[-2]+'_'+file.stem, #adaptar esto según la estructura de carpetas
             #                                           #'vAngBiela' : vAngBiela,
-            #                                           'time' : np.arange(0, len(dfprovis)/frec, 1/frec)[0:len(dfprovis)] #la parte final es para asegurarse de que se queda con el tamaño adecuado
+            #                                           'time' : np.arange(0, len(dfprovis)/freq, 1/freq)[0:len(dfprovis)] #la parte final es para asegurarse de que se queda con el tamaño adecuado
             #                                          }))#.reset_index(drop=True))
             
             print('Tiempo {0:.3f} s \n'.format(time.time()-timerSub))
@@ -1603,7 +1637,7 @@ def carga_preprocesa_csv_EMG_pl_xr(listaArchivos, nom_vars_cargar=None, nomBloqu
    
     daTodos = daTodos*1000 #pasa a milivoltios
     daTodos.name='EMG'
-    daTodos.attrs['frec'] = float(frec)
+    daTodos.attrs['freq'] = float(freq)
     daTodos.attrs['units'] = 'mV'
     daTodos.time.attrs['units'] = 's'
     #daTodos.isel(ID=0).sel(n_var='GLU')
@@ -1612,11 +1646,11 @@ def carga_preprocesa_csv_EMG_pl_xr(listaArchivos, nom_vars_cargar=None, nomBloqu
         
     #-------------------------------
     
-    return daTodos#, dfTodosArchivos, float(frec)
+    return daTodos#, dfTodosArchivos, float(freq)
 
 
     
-def carga_preprocesa_csv_EMG(listaArchivos, nom_vars_cargar=None, nomBloque='Devices', frecEMG=None):
+def carga_preprocesa_csv_EMG(listaArchivos, nom_vars_cargar=None, nomBloque='Devices', freqEMG=None):
     
     print('Cargando los archivos...')
     timer = time.time() #inicia el contador de tiempo
@@ -1631,8 +1665,8 @@ def carga_preprocesa_csv_EMG(listaArchivos, nom_vars_cargar=None, nomBloque='Dev
             timerSub = time.time() #inicia el contador de tiempo
             print('Cargando archivo: {0:s}'.format(file.name))
             
-            dfprovis, frec = read_vicon_csv(file, nomBloque=nomBloque, returnFrec=True, header_format='noflat')
-            #dfprovis, daprovis, frec = read_vicon_csv(file, nomBloque='Model Outputs', returnFrec=True, formatoxArray=True)
+            dfprovis, freq = read_vicon_csv(file, nomBloque=nomBloque, returnFreq=True, header_format='noflat')
+            #dfprovis, daprovis, freq = read_vicon_csv(file, nomBloque='Model Outputs', returnFreq=True, formatoxArray=True)
             if nom_vars_cargar:
                 dfprovis = dfprovis[nom_vars_cargar]
                 
@@ -1647,25 +1681,25 @@ def carga_preprocesa_csv_EMG(listaArchivos, nom_vars_cargar=None, nomBloque='Dev
             elif nomBloque=='Model Outputs':
                 #Añade el ángulo de la biela para lado L y R interpolando de marcadores a EMG
                 angBiela = dfprovis['AngBiela']['y']
-                angBiela = np.interp(np.arange(len(dfprovis)*frecEMG/frec)/frecEMG, np.arange(len(angBiela))/frec, angBiela) 
+                angBiela = np.interp(np.arange(len(dfprovis)*freqEMG/freq)/freqEMG, np.arange(len(angBiela))/freq, angBiela) 
                 
                 dPedal_z = dfprovis['PosPedal_R']['z'] - dfprovis['PosPedal_L']['z']
-                dPedal_z = np.interp(np.arange(len(dfprovis)*frecEMG/frec)/frecEMG, np.arange(len(dPedal_z))/frec, dPedal_z)
+                dPedal_z = np.interp(np.arange(len(dfprovis)*freqEMG/freq)/freqEMG, np.arange(len(dPedal_z))/freq, dPedal_z)
                 
                 dfprovis = pd.DataFrame(np.asarray([angBiela,angBiela, dPedal_z,dPedal_z]).T, columns=['AngBiela_L', 'AngBiela_R', 'dPedal_z_L', 'dPedal_z_R'])
-                frec = frecEMG
+                freq = freqEMG
             
             #Añade columna ID y time
             dfprovis.insert(0, 'ID', [file.parent.parts[-2]+'_'+file.stem]*len(dfprovis))
             #dfprovis.insert(0, 'ID', [file.stem]*len(dfprovis))
             if 'time' not in dfprovis.columns:
-                dfprovis.insert(1, 'time', np.arange(len(dfprovis))[0:len(dfprovis)]/frec) #la parte final es para asegurarse de que se queda con el tamaño adecuado
+                dfprovis.insert(1, 'time', np.arange(len(dfprovis))[0:len(dfprovis)]/freq) #la parte final es para asegurarse de que se queda con el tamaño adecuado
             
             dfTodosArchivos.append(dfprovis)
             
             # dfTodosArchivos.append(dfprovis.assign(**{'ID' : file.parent.parts[-2]+'_'+file.stem, #adaptar esto según la estructura de carpetas
             #                                           #'vAngBiela' : vAngBiela,
-            #                                           'time' : np.arange(0, len(dfprovis)/frec, 1/frec)[0:len(dfprovis)] #la parte final es para asegurarse de que se queda con el tamaño adecuado
+            #                                           'time' : np.arange(0, len(dfprovis)/freq, 1/freq)[0:len(dfprovis)] #la parte final es para asegurarse de que se queda con el tamaño adecuado
             #                                          }))#.reset_index(drop=True))
             
             print('Tiempo {0:.3f} s \n'.format(time.time()-timerSub))
@@ -1694,7 +1728,7 @@ def carga_preprocesa_csv_EMG(listaArchivos, nom_vars_cargar=None, nomBloque='Dev
    
     daTodos = daTodos*1000 #pasa a milivoltios
     daTodos.name='EMG'
-    daTodos.attrs['frec'] = float(frec)
+    daTodos.attrs['freq'] = float(freq)
     daTodos.attrs['units'] = 'mV'
     daTodos.time.attrs['units'] = 's'
     #daTodos.isel(ID=0).sel(n_var='GLU')
@@ -1703,11 +1737,11 @@ def carga_preprocesa_csv_EMG(listaArchivos, nom_vars_cargar=None, nomBloque='Dev
         
     #-------------------------------
     
-    return daTodos#, dfTodosArchivos, float(frec)
+    return daTodos#, dfTodosArchivos, float(freq)
 
 
 
-def carga_preprocesa_c3d_EMG(listaArchivos, nom_vars_cargar=None, nomBloque='Devices', frecEMG=None):
+def carga_preprocesa_c3d_EMG(listaArchivos, nom_vars_cargar=None, nomBloque='Devices', freqEMG=None):
     import c3d
     
     print('Cargando los archivos...')
@@ -1727,7 +1761,7 @@ def carga_preprocesa_c3d_EMG(listaArchivos, nom_vars_cargar=None, nomBloque='Dev
             with open(file, 'rb') as handle:
                 reader = c3d.Reader(handle)
                     
-                frecEMG = reader.analog_rate
+                freqEMG = reader.analog_rate
                 n_var = reader.analog_labels
                 
                 analog = []        
@@ -1746,11 +1780,11 @@ def carga_preprocesa_c3d_EMG(listaArchivos, nom_vars_cargar=None, nomBloque='Dev
                               dims=('ID', 'n_var', 'time'),
                               coords={'ID': [file.parent.parts[-2]+'_'+file.stem],
                                       'n_var': (labels),
-                                      'time': (np.arange(0,data.shape[1])/frecEMG),
+                                      'time': (np.arange(0,data.shape[1])/freqEMG),
                                       
                                       },
                               name='EMG',
-                              attrs={'frec': frecEMG,
+                              attrs={'freq': freqEMG,
                                      'units': 'mV',}                              
                               )
             da.time.attrs['units']='s'
@@ -1865,7 +1899,7 @@ def procesaEMG(daEMG, fr=None, fc_band=[10, 400], fclow=8, btkeo=False):
     #filtro low-pass
     daEMG_proces = filtrar_Butter(daEMG_proces, fr=fr, fc=fclow, kind='low')    
     
-    # daEMG_proces.attrs['frec'] = daEMG.attrs['frec']
+    # daEMG_proces.attrs['freq'] = daEMG.attrs['freq']
     # daEMG_proces.attrs['units'] = daEMG.attrs['units']
     # daEMG_proces.time.attrs['units'] = daEMG.time.attrs['units']
     daEMG_proces.attrs = daEMG.attrs    
@@ -1971,11 +2005,11 @@ def segmenta_ModeloBikefitting_xr_cinem(daDatos, num_cortes=12, graficas=False):
 #     #Es necesario separar lado L y R porque usan criterios distintos de corte
 #     #Corta izquierdo
 #     dfL = dfArchivo.drop(dfArchivo.filter(regex='|'.join(['_R_', '_LR_'])).columns, axis=1).assign(**{'AngBiela_LR_y' : dfArchivo['AngBiela_LR_y'], 'vAngBiela_LR_x' : dfArchivo['vAngBiela_LR_x']}) #añade las bielas al final
-#     dfL = corta_repes(dfL, func_cortes=detect_peaks, frec=Frec,  col_factores='ID', col_referencia='AngBiela_LR_y', col_variables=nomVarsContinuas_L_coord+['vAngBiela_LR_x'], descarta_rep_ini=1, descarta_rep_fin=0, incluye_primero_siguiente=True, **dict(valley=True, show=graficas))
+#     dfL = corta_repes(dfL, func_cortes=detect_peaks, frec=freq,  col_factores='ID', col_referencia='AngBiela_LR_y', col_variables=nomVarsContinuas_L_coord+['vAngBiela_LR_x'], descarta_rep_ini=1, descarta_rep_fin=0, incluye_primero_siguiente=True, **dict(valley=True, show=graficas))
     
 #     #Corta derecho y LR a la vez
 #     dfR = dfArchivo.drop(dfArchivo.filter(regex='|'.join(['_L_'])).columns, axis=1) #al derecho no hace falta añadir bielas
-#     dfR = corta_repes(dfArchivo, func_cortes=detect_onset_aux, frec=Frec,  col_factores='ID', col_referencia='AngBiela_LR_y', col_variables=nomVarsContinuas_R_coord+nomVarsContinuas_LR_coord+['vAngBiela_LR_x'], descarta_rep_ini=1, descarta_rep_fin=0, **dict(threshold=0.0, corte_ini=0, n_above=2, show=graficas))
+#     dfR = corta_repes(dfArchivo, func_cortes=detect_onset_aux, frec=freq,  col_factores='ID', col_referencia='AngBiela_LR_y', col_variables=nomVarsContinuas_R_coord+nomVarsContinuas_LR_coord+['vAngBiela_LR_x'], descarta_rep_ini=1, descarta_rep_fin=0, **dict(threshold=0.0, corte_ini=0, n_above=2, show=graficas))
 #     dfR = dfR.loc[:,~dfR.columns.duplicated()] #quita un vAngBiela duplicado
 #     dfLR = dfR
 
