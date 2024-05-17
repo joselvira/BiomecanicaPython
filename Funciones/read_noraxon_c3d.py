@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fry Sep 15 16:36:37 2023
+Created on Fry Mar 08 12:17:37 2024
 
 @author: josel
 """
@@ -8,9 +8,6 @@ Created on Fry Sep 15 16:36:37 2023
 # =============================================================================
 # %% Carga librerías
 # =============================================================================
-
-from __future__ import division, print_function
-
 import warnings  # para quitar warnings de no encontrar points
 
 import numpy as np
@@ -20,16 +17,17 @@ import xarray as xr
 import c3d
 import time
 
+# import sys
+# sys.path.append('F:\Programacion\Python\Mios\Functions')
+# #sys.path.append('G:\Mi unidad\Programacion\Python\Mios\Functions')
+
 __author__ = "Jose Luis Lopez Elvira"
-__version__ = "0.0.2"
-__date__ = "23/12/2023"
+__version__ = "0.0.1"
+__date__ = "08/03/2024"
 
 """
-Modificaciones:
-    23/12/2023, v0.0.2
-            - Perfeccionada carga de fuerzas.
-
-    15/09/2023, v0.0.1
+Modificaciones:    
+    08/03/2024, v0.0.1
             - Empezado tomando trozos sueltos.
             
 """
@@ -38,11 +36,10 @@ Modificaciones:
 # =============================================================================
 # %% Carga trayectorias desde c3d
 # =============================================================================
-def read_vicon_c3d_xr(file, section=None, n_vars_load=None, coincidence="similar"):
+def read_noraxon_c3d_xr(file, section=None, n_vars_load=None, coincidence="similar"):
     if section not in [
         "Trajectories",
         "Model Outputs",
-        "Forces",
         "EMG",
     ]:  # not ('Trajectories' in section or 'Model Outputs'in section or 'Forces' in section or 'EMG'in section):
         raise Exception(
@@ -69,7 +66,8 @@ def read_vicon_c3d_xr(file, section=None, n_vars_load=None, coincidence="similar
 
                 points = []
                 analog = []
-                for i, (_, p, a) in enumerate(reader.read_frames()):
+                # for i, (_, p, a) in enumerate(reader.read_frames()):
+                for _, p, a in reader.read_frames():
                     points.append(p)
                     analog.append(a)
                     # if not i % 10000 and i:
@@ -108,7 +106,7 @@ def read_vicon_c3d_xr(file, section=None, n_vars_load=None, coincidence="similar
         # Analogs
         elif section in ["Forces", "EMG"]:  # ('Forces' in section or 'EMG' in section):
             labels_analog = [
-                s.split(".")[0].replace(" ", "") for s in reader.analog_labels
+                s.split(".")[1].replace(" ", "") for s in reader.analog_labels
             ]
             data_analog = np.concatenate(analog, axis=1)
 
@@ -124,56 +122,8 @@ def read_vicon_c3d_xr(file, section=None, n_vars_load=None, coincidence="similar
                 attrs={"freq": freq_analog},
             )
 
-            # Forces
-            # Sometimes contains 'Force' and others 'Fx', Fy', 'Fz'
-            # Get only force variables
-            if section == "Forces":
-                if "Force" in da_analog.n_var:  # new versions of Nexus?
-                    da = da_analog.sel(n_var=da_analog.n_var.str.contains("Force"))
-                elif da_analog.n_var.str.contains("Fz").any():  # old versions of Nexus?
-                    da = da_analog.sel(n_var=da_analog.n_var.str.startswith("F"))
-                else:
-                    da = xr.DataArray()
-                    raise Exception("Apparently no force data in file")
-                # if da_analog.n_var.str.startswith('F').any():#da_analog.n_var.str.contains('Force').any(): #'Force' in da_analog.n_var:
-                try:
-                    # da = da_analog.sel(n_var=da_analog.n_var.str.startswith('F')) #'Force') #.sel(n_var=da_analog.n_var.str.contains('Force'))
-                    if len(da.n_var) == 3:  # 1 platform
-                        x = da.isel(n_var=0)
-                        y = da.isel(n_var=1)
-                        z = da.isel(n_var=2)
-                        da = (
-                            xr.concat([x, y, z], dim="axis")
-                            .assign_coords(n_var="plat1")
-                            .assign_coords(axis=["x", "y", "z"])
-                            .expand_dims({"n_var": 1})
-                        )
-                    elif len(da.n_var) == 6:  # 2 platforms
-                        x = da.isel(n_var=[0, 3]).assign_coords(
-                            n_var=["plat1", "plat2"]
-                        )
-                        y = da.isel(n_var=[1, 4]).assign_coords(
-                            n_var=["plat1", "plat2"]
-                        )
-                        z = da.isel(n_var=[2, 5]).assign_coords(
-                            n_var=["plat1", "plat2"]
-                        )
-                        da = (
-                            xr.concat([x, y, z], dim="axis")
-                            # .assign_coords(n_var=['plat1', 'plat2'])
-                            .assign_coords(axis=["x", "y", "z"])
-                        )
-                    else:
-                        raise Exception("The number of Force variables is not 3 or 6")
-                    da.attrs["units"] = "N"
-                    # da.time.attrs['units']='s'
-                    # da.plot.line(x='time', col='axis', hue='n_var')
-                except:
-                    da = xr.DataArray()
-                    raise Exception("Not available force data in file")
-
             # EMG
-            elif section == "EMG":
+            if section == "EMG":
                 if da_analog.n_var.str.contains("EMG").any():
                     da = da_analog.sel(n_var=da_analog.n_var.str.contains("EMG"))
                     da.attrs["units"] = "mV"
@@ -236,8 +186,8 @@ def read_vicon_c3d_xr_global(
                 for i, (_, p, a) in enumerate(reader.read_frames()):
                     points.append(p)
                     analog.append(a)
-                    # if not i % 10000 and i:
-                    #     print("Extracted %d point frames", len(points))
+                    if not i % 10000 and i:
+                        print("Extracted %d point frames", len(points))
 
         # Trajectiories and Modeled outputs
         if "Trajectories" in section or "Model Outputs" in section:
@@ -382,8 +332,8 @@ def read_vicon_c3d_xr_global_ds(
                 for i, (_, p, a) in enumerate(reader.read_frames()):
                     points.append(p)
                     analog.append(a)
-                    # if not i % 10000 and i:
-                    #     print("Extracted %d point frames", len(points))
+                    if not i % 10000 and i:
+                        print("Extracted %d point frames", len(points))
 
                 labels = [s.replace(" ", "") for s in reader.point_labels]
                 labels_analog = [
@@ -493,109 +443,15 @@ def read_vicon_c3d_xr_global_ds(
 if __name__ == "__main__":
     from pathlib import Path
 
-    ruta_archivo = Path(r"F:\Programacion\Python\Mios\ViconNexus\C3D\ArchivosC3D")
-    file = ruta_archivo / "SaltosS13_SJ_100S_03.c3d"
-    daTrajec = read_vicon_c3d_xr(file, section="Trajectories")
-    daTrajec.isel(n_var=slice(6)).plot.line(x="time", col="n_var", col_wrap=3)
-
-    daTrajec = read_vicon_c3d_xr(
-        file, section="Trajectories", n_vars_load=["LPSI", "LASIMID", "RASIMID", "RPSI"]
+    file = Path(
+        r"F:\Investigacion\Proyectos\Tesis\TesisCoralPodologa\Registros\PilotoNoraxon\S000\2024-03-08-10-43_PO_S000_carrera_001.c3d"
     )
-    daTrajec.plot.line(x="time", col="n_var")
+    daTrajec = read_noraxon_c3d_xr(file, section="EMG")
 
-    daModels = read_vicon_c3d_xr(file, section="Model Outputs")
-    # Mezcla variables modeladas de ángulo con EMG (3 canales por variable)
-    daModels.isel(n_var=slice(None)).plot.line(
-        x="time", col="n_var", col_wrap=3, sharey=False
+    ruta_archivo = Path(
+        r"F:\Investigacion\Proyectos\Tesis\TesisCoralPodologa\Registros\PilotoNoraxon\S000"
     )
-    # modelos sacados directamente de exportar a csv
-    nom_vars = ",,S13:AngArtAnkle_R,,,S13:AngArtHip_R,,,S13:AngArtKnee_R,,,S13:AngSegMUSLO_R,,,S13:AngSegPELVIS_LR,,,S13:AngSegPIERNA_R,,,S13:AngSegPIE_R,,,S13:EMG1,S13:EMG2,S13:EMG3,S13:EMG4,S13:EMG5,S13:EMG6,S13:Forces,,,S13:LASI,,,S13:LHJC,,,S13:RAJC,,,S13:RASI,,,S13:RHJC,,,S13:RKJC,,,S13:Right_AnkleExt,,,S13:Right_AnkleInt,,,S13:Right_KneeExt,,,S13:Right_KneeInt,,,S13:LASI,,,S13:LHJC,,,S13:RAJC,,,S13:RASI,,,S13:RHJC,,,S13:RKJC,,,S13:Right_AnkleExt,,,S13:Right_AnkleInt,,,S13:Right_KneeExt,,,S13:Right_KneeInt,,,".split(
-        ","
-    )[
-        2::3
-    ]
-    nom_vars = [s.split(":")[-1] for s in nom_vars]
-    # Hay que hacer el ajuste de los nombres de las variables a mano para que coincidan
-    replace_vars = dict(zip(daModels.n_var.data[:7], nom_vars[:7]))
-    names = pd.DataFrame(daModels.n_var.data).replace(replace_vars)[0].tolist()
-    daModels = daModels.assign_coords(n_var=names)
+    file = ruta_archivo / "2024-03-08-10-43_PO_S000_carrera_001.c3d"
 
-    daModel_forces = daModels.isel(n_var=-1)
-    daModel_forces.plot.line(x="time")
-    daModel_EMG = daModels.sel(n_var=daModels.n_var.str.contains("USER")).isel(
-        n_var=slice(None, -1)
-    )
-    daModel_EMG.plot.line(x="time", col="n_var", col_wrap=3)
-
-    daForce = read_vicon_c3d_xr(file, section="Forces")
-    daForce.plot.line(x="time", col="n_var", col_wrap=3)
-
-    daEMG = read_vicon_c3d_xr(
-        file,
-        section="EMG",
-        n_vars_load=["EMG1", "EMG2", "EMG3", "EMG4", "EMG5", "EMG6"],
-    )
-    daEMG.plot.line(x="time", col="n_var", col_wrap=3)
-
-    [daTrajec, daModels] = read_vicon_c3d_xr_global(
-        file, section=["Trajectories", "Model Outputs"]
-    )
-    daTrajec.isel(n_var=slice(6)).plot.line(x="time", col="n_var", col_wrap=3)
-    daModels.isel(n_var=slice(6)).plot.line(x="time", col="n_var", col_wrap=3)
-
-    n_vars_load = {
-        "Trajectories": ["LPSI", "LASIMID", "RASIMID", "RPSI"],
-        "Model Outputs": [
-            "USERMO",
-            "USERM1",
-            "USERM2",
-        ],
-    }
-    [daTrajec, daModels] = read_vicon_c3d_xr_global(
-        file, section=["Trajectories", "Model Outputs"]
-    )
-    daTrajec.isel(n_var=slice(6)).plot.line(x="time", col="n_var", col_wrap=3)
-    daModels.isel(n_var=slice(6)).plot.line(x="time", col="n_var", col_wrap=3)
-
-    ruta_archivo = Path(r"F:\Programacion\Python\Mios\ViconNexus\C3D\ArchivosC3D")
-    file = ruta_archivo / "SillaRuedas-s1905.c3d"
-    daForce = read_vicon_c3d_xr(file, section="Forces")
-    daForce.plot.line(x="time", col="n_var", col_wrap=3)
-
-    daEMG = read_vicon_c3d_xr(
-        file,
-        section="EMG",
-        n_vars_load=["EMG1", "EMG2", "EMG3", "EMG4", "EMG5", "EMG6"],
-    )
-
-    ruta_archivo = Path(r"F:\Programacion\Python\Mios\ViconNexus\C3D\ArchivosC3D")
-    file = ruta_archivo / "Pablo_FIN.c3d"
-    daModels = read_vicon_c3d_xr(file, section="Model Outputs")
-    daModels.isel(n_var=slice(6)).plot.line(x="time", col="n_var", col_wrap=3)
-    daForce = read_vicon_c3d_xr(file, section="Forces")
-    daForce.plot.line(x="time", col="n_var", col_wrap=3)
-
-    daEMG = read_vicon_c3d_xr(
-        file,
-        section="EMG",
-        n_vars_load=["EMG1", "EMG2", "EMG3", "EMG4", "EMG5", "EMG6"],
-    )
-
-    # ---- Compara con ezc3d
-
-    ruta_archivo = Path(r"F:\Programacion\Python\Mios\ViconNexus\C3D\ArchivosC3D")
-    file = ruta_archivo / "SaltosS13_SJ_100S_03.c3d"
-
-    t = time.perf_counter()  # inicia el contador de tiempo
-    for i in range(50):
-        da = read_vicon_c3d_xr(file, section="Trajectories")
-    print(time.perf_counter() - t)
-
-    import ezc3d
-
-    t = time.perf_counter()  # inicia el contador de tiempo
-    for i in range(50):
-        c = ezc3d.c3d(file)
-    print(time.perf_counter() - t)
-
+    daTrajec = read_noraxon_c3d_xr(file, section="EMG")
     daTrajec.isel(n_var=slice(6)).plot.line(x="time", col="n_var", col_wrap=3)
