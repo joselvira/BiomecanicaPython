@@ -20,13 +20,16 @@ El máximo lo utiliza para normalizar los canales EMG del archivo actual.
 
 
 __filename__ = "Nexus_FuncionesApoyo"
-__version__ = "0.2.2"
+__version__ = "0.3.0"
 __company__ = "CIDUMH"
-__date__ = "11/05/2024"
+__date__ = "21/05/2024"
 __author__ = "Jose L. L. Elvira"
 
 """
 Modificaciones:
+    21/05/2024, v0.3.0
+        - Ahora importa funciones útiles desde el package instalable biomdp.
+    
     11/05/2024, v0.2.2
         - Incluido escribir variables en Nexus de fuerzas y EMG.
     
@@ -88,6 +91,13 @@ import spm1d  # para comparar curvas
 import os
 import sys
 
+from biomdp.readViconCsv import read_vicon_csv, read_vicon_csv_pl_xr
+from biomdp.read_vicon_c3d import read_vicon_c3d_xr
+import biomdp.slice_time_series_phases as stsp
+
+# from biomdp.slice_time_series_phases import SliceTimeSeriesPhases as stsp
+
+r"""
 # Para que intente cargar antes la versión de mi carpeta más actualizada
 carpeta_funciones = Path(r"F:\Programacion\Python\Mios\Functions")
 if carpeta_funciones.exists():
@@ -100,12 +110,12 @@ else:
 
 from readViconCsv import read_vicon_csv, read_vicon_csv_pl_xr
 from read_vicon_c3d import read_vicon_c3d_xr
-
+from slice_time_series_phases import SliceTimeSeriesPhases as stsp
+"""
 # from cortar_repes_ciclicas import CortaTimeSeries as cts
 # from cortar_repes_ciclicas import corta_repes, corta_repes_xr
 
 # from calculaEulerAngles import euler_angles_from_rot_xyz  # para calcular el ángulo entre 2 matrices de rotación
-from slice_time_series_phases import SliceTimeSeriesPhases as stsp
 
 # from cortar_repes_ciclicas import corta_repes as cts
 
@@ -2898,9 +2908,6 @@ def carga_preprocesa_c3d_EMG(
     daTodosArchivos = daTodosArchivos.assign_coords(test=("ID", lista_coords))
 
     return daTodosArchivos
-
-
-
 
 
 # =============================================================================

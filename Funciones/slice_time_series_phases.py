@@ -1,8 +1,8 @@
 # %% -*- coding: utf-8 -*-
 """
 Created on Thu Sep 30 18:01:08 2021
-Modificación para usar desde xarray accessor biomec_xarray_processing.
-Basado en slice_time_series_phases.py v3.1.2
+Funciones para realizar cortes en señales cíclicas usando un criterio interno o externo.
+Basado en xarray.
 
 @author: josel
 """
@@ -26,7 +26,7 @@ __date__ = "23/04/2024"
 Modificaciones:
     23/04/2024, v4.1.0
         - Actualizado versión slice con Polars, puede que sea más rapido.
-        - TODO: Hacer versión detect_onset que use find_peaks con la señal derivada
+        - TODO: Probar versión detect_onset que use find_peaks con la señal derivada
     
     22/02/2024, v4.0.0
         - Cambio a funciones independientes para usar con el xarray accessor.
@@ -422,7 +422,7 @@ def slice_time_series(
         dat, evts, max_phases, max_time, ID, var, include_first_next_last=True
     ):
         phases = np.full((max_phases, max_time), np.nan)
-
+        # print(ID, var)
         if (
             np.count_nonzero(~np.isnan(dat)) == 0
             or np.count_nonzero(~np.isnan(evts)) == 0
@@ -681,8 +681,8 @@ def slice_time_series(
         raise ValueError(f"Unknown split_version_function: {split_version_function}")
 
     """
-    dat=data[0,0,0].values
-    evts=events[0,0,0].values
+    dat=data[0,0,0,1].values
+    evts=events[0,0,0,1].values
     """
     max_phases = int(events.n_event[-1])
     max_time = int(events.diff("n_event").max()) + 1

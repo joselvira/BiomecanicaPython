@@ -16,13 +16,16 @@ Heredado de Nexus_FuncionesApoyo.py
 
 
 __filename__ = "bikefittinh_funciones_apoyo"
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 __company__ = "CIDUMH"
 __date__ = "23/04/2024"
 __author__ = "Jose L. L. Elvira"
 
 """
 Modificaciones:          
+    21/05/2024, v0.2.0
+        - Ahora importa funciones útiles desde el package instalable biomdp.
+    
     08/05/2024, v0.1.1
         - Corregido cálculo de la mecia y std longitudes restringido a region_of_interest.
     
@@ -70,8 +73,15 @@ import time  # para cuantificar tiempos de procesado
 import spm1d  # para comparar curvas
 
 import time
-import sys
 
+# Importa mis funciones necesarias
+import biomdp.biomec_xarray_accessor  # accessor biomxr
+import biomdp.Nexus_FuncionesApoyo as nfa  # funciones de apoyo con datos del Nexus
+import biomdp.slice_time_series_phases as stsp
+# from biomec_processing.slice_time_series_phases import SliceTimeSeriesPhases as stsp  # tratamientos para bike fitting Nexus
+
+r"""
+import sys
 sys.path.append(r"F:\Programacion\Python\Mios\Functions")
 sys.path.append(
     "/media/yomismo/Seagate Basic/Programacion/Python/Mios/Functions"
@@ -81,7 +91,7 @@ import Nexus_FuncionesApoyo as nfa
 
 # from calculaEulerAngles import euler_angles_from_rot_xyz #para calcular el ángulo entre 2 matrices de rotación
 from slice_time_series_phases import SliceTimeSeriesPhases as stsp
-
+"""
 # from cortar_repes_ciclicas import corta_repes as cts
 
 # from readViconCsv import read_vicon_csv, read_vicon_csv_pl_xr
@@ -1092,7 +1102,7 @@ def segmenta_ModeloBikefitting_xr_cinem(
     print("Cortando lado L...")
     # daData.isel(ID=0).sel(side="R", n_var='AngBiela').plot.line(x='time')
 
-    daL = daData.sel(side="L").biomxr.slice_time_series(
+    daL = stsp.slice_time_series(daData.sel(side="L"),
         func_events=stsp.detect_onset_detecta_aux,
         reference_var=dict(n_var="AngBiela", axis="y"),
         discard_phases_ini=1,
@@ -1101,8 +1111,19 @@ def segmenta_ModeloBikefitting_xr_cinem(
         include_first_next_last=True,
         **dict(threshold=0.0, n_above=2, event_ini=1, show=show),
     )
+    """COMPROBAR, FALLA CON DATAARRAY NON NANS
+    daData.sel(side="L").biomxr.slice_time_series(
+        func_events=stsp.detect_onset_detecta_aux,
+        reference_var=dict(n_var="AngBiela", axis="y"),
+        discard_phases_ini=1,
+        discard_phases_end=0,
+        n_phases=num_cortes,
+        include_first_next_last=True,
+        **dict(threshold=0.0, n_above=2, event_ini=1, show=show),
+    )
+    """
     print("Cortando lado R...")
-    daR = daData.sel(side="R").biomxr.slice_time_series(
+    daR = stsp.slice_time_series(daData.sel(side="R"),
         func_events=stsp.detect_onset_detecta_aux,
         reference_var=dict(n_var="AngBiela", axis="y"),
         discard_phases_ini=1,
@@ -1111,6 +1132,16 @@ def segmenta_ModeloBikefitting_xr_cinem(
         include_first_next_last=True,
         **dict(threshold=0.0, n_above=2, event_ini=0, show=show),
     )
+    
+    """daData.sel(side="R").biomxr.slice_time_series(
+        func_events=stsp.detect_onset_detecta_aux,
+        reference_var=dict(n_var="AngBiela", axis="y"),
+        discard_phases_ini=1,
+        discard_phases_end=0,
+        n_phases=num_cortes,
+        include_first_next_last=True,
+        **dict(threshold=0.0, n_above=2, event_ini=0, show=show),
+    )"""
     """
     print('Cortando lados R y LR...')
     daR = stsp(data=daData.sel(side=['R', 'LR']), func_events=stsp.detect_onset_detecta_aux,
@@ -1355,23 +1386,48 @@ def calcula_descrip_antropo_global(daData, daDataNorm):
     for n, _ in daData.groupby("ID"):
         calcula_descrip_antropo(dagb=daData.sel(ID=n), daNorm=daDataNorm)
     """
-    
-    # Distancias anatómicas, se mide en posición 180º de biela    
-    HJC = daDataNorm.sel(side=["L", "R"], n_var="HJC", AngBielaInRepe=180)
-    KJC = daDataNorm.sel(side=["L", "R"], n_var="KJC", AngBielaInRepe=180)
-    AJC = daDataNorm.sel(side=["L", "R"], n_var="AJC", AngBielaInRepe=180)
-    muslo = np.sqrt(
-        (HJC.sel(axis="x") - KJC.sel(axis="x")) ** 2
-        + (HJC.sel(axis="y") - KJC.sel(axis="y")) ** 2
-        + (HJC.sel(axis="z") - KJC.sel(axis="z")) ** 2
-    ).mean(dim="phase").drop_vars(["AngBielaInRepe", 'AngBielaInRepe_rad'])
+    if 'LengthMuslo' in daData.n_var:
+        muslo = (daDataNorm.sel(n_var="LengthMuslo", AngBielaInRepe=180, axis='x')
+                 .drop_vars('axis')
+                 .mean('phase')
+        )
+    else:
+        # Distancias anatómicas, se mide en posición 180º de biela    
+        HJC = daDataNorm.sel(side=["L", "R"], n_var="HJC", AngBielaInRepe=180)
+        KJC = daDataNorm.sel(side=["L", "R"], n_var="KJC", AngBielaInRepe=180)
+        AJC = daDataNorm.sel(side=["L", "R"], n_var="AJC", AngBielaInRepe=180)
+        muslo = np.sqrt(
+            (HJC.sel(axis="x") - KJC.sel(axis="x")) ** 2
+            + (HJC.sel(axis="y") - KJC.sel(axis="y")) ** 2
+            + (HJC.sel(axis="z") - KJC.sel(axis="z")) ** 2
+        ).mean(dim="phase").drop_vars(["AngBielaInRepe", 'AngBielaInRepe_rad'])
     muslo.name='muslo'
-    pierna = np.sqrt(
-        (KJC.sel(axis="x") - AJC.sel(axis="x")) ** 2
-        + (KJC.sel(axis="y") - AJC.sel(axis="y")) ** 2
-        + (KJC.sel(axis="z") - AJC.sel(axis="z")) ** 2
-    ).mean(dim="phase").drop_vars(["AngBielaInRepe", 'AngBielaInRepe_rad'])
+    
+    if 'LengthPierna' in daData.n_var:
+        pierna = (daDataNorm.sel(n_var="LengthPierna", AngBielaInRepe=180, axis='x')
+                 .drop_vars('axis')
+                 .mean('phase')
+        )
+    else:
+        pierna = np.sqrt(
+            (KJC.sel(axis="x") - AJC.sel(axis="x")) ** 2
+            + (KJC.sel(axis="y") - AJC.sel(axis="y")) ** 2
+            + (KJC.sel(axis="z") - AJC.sel(axis="z")) ** 2
+        ).mean(dim="phase").drop_vars(["AngBielaInRepe", 'AngBielaInRepe_rad'])
     pierna.name='pierna'
+    
+    if 'LengthPie' in daData.n_var:
+        pie = (daDataNorm.sel(n_var="LengthPie", AngBielaInRepe=180, axis='x')
+                 .drop_vars('axis')
+                 .mean('phase')
+        )
+    else:
+        print('No se ha podido calcular la longitud del pie')
+        pie = xr.full_like((daDataNorm.isel(n_var=0).sel(AngBielaInRepe=180, axis='x')
+                 .drop_vars('axis')
+                 .mean('phase')
+        ), np.nan)
+    pie.name='pie'
     """
     muslo2=np.sqrt((
         (daDataNorm.sel(n_var=["KJC", "HJC"], AngBielaInRepe=180).mean(dim="phase")
@@ -1420,29 +1476,30 @@ def calcula_descrip_antropo_global(daData, daDataNorm):
     # )
     
     dfAntropo1 = (
-        xr.concat([muslo, pierna], pd.Index(["muslo", "pierna"], name="n_var"))
+        xr.concat([muslo, pierna, pie], pd.Index(["muslo", "pierna", 'pie'], name="n_var"))
         # .transpose('ID', 'segmento', 'side')
-        .to_dataframe()
+        .to_dataframe('value')
         .reset_index()
         # .drop(columns=["axis"])
-        .reindex(columns=["ID", "particip", "n_var", "side", muslo.name])
-        .rename(columns={muslo.name:'value'})
+        # .reindex(columns=["ID", "particip", "n_var", "side", muslo.name])
+        # .rename(columns={muslo.name:'value'})
     )    
     dfAntropo2 = (xr.concat([ancho_caderas, ancho_pedales], pd.Index(["ancho_caderas", "ancho_pedales"], name="n_var"))
     .assign_coords(side=['LR'])
-    .to_dataframe().reset_index()
-    .reindex(columns=["ID", "particip", "n_var", "side", ancho_caderas.name])
-    .rename(columns={ancho_caderas.name:'value'})
+    .to_dataframe('value').reset_index()
+    # .reindex(columns=["ID", "particip", "n_var", "side", ancho_caderas.name])
+    # .rename(columns={ancho_caderas.name:'value'})
     )
     
     dfAntropo = (pd.concat([dfAntropo1, dfAntropo2], axis=0).reset_index(drop=True)
-            .reindex(columns=['n_var', 'ID', "particip", 'side', 'value'])
+            # .reindex(columns=['n_var', 'ID', "particip", 'side', 'value'])
     )
         
     # OBTIENE DATOS DISCRETOS SEGÚN POSICIÓN BIELA DISCRETA
+    vars_group = [n for n in daDataNorm.dims if n not in ['phase', 'AngBielaInRepe']]
     dfResumen_discreto = (daDataNorm.sel(n_var=["AngArtHip", "AngArtKnee", "AngArtAnkle", "AngSegPELVIS"], AngBielaInRepe=[0, 90, 180])
         .to_dataframe(name="value")
-        .groupby(["ID", "particip", "n_var", "AngBielaInRepe", "axis", "side"])["value"]
+        .groupby(vars_group)["value"]
         .agg(["mean", "std"])
         .reset_index()
     )
@@ -1467,7 +1524,7 @@ def calcula_descrip_antropo_global(daData, daDataNorm):
         rmse.to_dataframe()
         .reset_index()
         .drop(columns=["axis"])
-        .reindex(columns=["ID", "particip", "n_var", daData.name])
+        # .reindex(columns=["ID", "particip", "n_var", daData.name])
         .rename(columns={"Cinem": "RMSE"})
     )
 
