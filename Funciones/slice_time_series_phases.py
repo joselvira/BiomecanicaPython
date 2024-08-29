@@ -1612,8 +1612,8 @@ if __name__ == "__main__":
         discard_phases_ini=0,
         n_phases=None,
         discard_phases_end=0,
-        include_first_next_last=True,
-        **dict(threshold=60, show=True),
+        include_first_next_last=False,
+        **dict(threshold=60, show=False),
     )
     daCortado.sel(n_var="b").plot.line(x="time", col="momento", hue="phase", row="ID")
 
@@ -1684,7 +1684,6 @@ if __name__ == "__main__":
         discard_phases_ini=0,
         n_phases=None,
         discard_phases_end=0,
-        include_first_next_last=True,
         **dict(height=0, distance=10),
     )
 
@@ -1698,7 +1697,9 @@ if __name__ == "__main__":
         discard_phases_end=0,
         **dict(threshold=60, show=False),
     )
-    daCortado.sel(n_var="b").plot.line(x="time", col="momento", hue="phase", row="ID")
+    daCortado.sel(n_var="b").plot.line(
+        x="n_event", col="momento", hue="phase", row="ID", marker="o"
+    )
 
     from general_processing_functions import integrate_window
 
@@ -1724,6 +1725,24 @@ if __name__ == "__main__":
     daTrimed.stack(var_momento=("n_var", "momento")).plot.line(
         x="time", col="var_momento", hue="phase", row="ID"
     )
+
+    # ---- Incrementando el nº de datos al inicio y final
+    daCortado = slice_time_series(
+        data=daTodos,
+        func_events=SliceTimeSeriesPhases.detect_onset_detecta_aux,
+        reference_var=dict(momento="pre", n_var="b"),
+        discard_phases_ini=0,
+        n_phases=None,
+        discard_phases_end=0,
+        add_to_ini=1,
+        add_to_end=1,
+        include_first_next_last=True,
+        **dict(threshold=60, show=False),
+    )
+    daCortado[0, 0, 0, :, :2]
+    daCortado[0, 0, 0, 0][~np.isnan(daCortado[0, 0, 0, 0])][-2:]  # final de una fase
+    daCortado[0, 0, 0, 1][~np.isnan(daCortado[0, 0, 0, 1])][-2:]  # final de una fase
+    daCortado.sel(n_var="b").plot.line(x="time", col="momento", hue="phase", row="ID")
 
     # =============================================================================
     # %% Test functions to slice (polars, numpy, ...)
@@ -1858,8 +1877,7 @@ if __name__ == "__main__":
             discard_phases_ini=0,
             n_phases=None,
             discard_phases_end=0,
-            include_first_next_last=True,
-            **dict(height=0, distance=10),
+            **dict(height=10, distance=10),
         )
         window = xr.concat(
             [daEvents.min("n_event"), daEvents.max("n_event")], dim="n_event"
