@@ -5,7 +5,10 @@ Created on Mon Apr 26 17:02:27 2017
 @author: YoMismo
 """
 
-from __future__ import division, print_function #division #Ensure division returns float
+from __future__ import (
+    division,
+    print_function,
+)  # division #Ensure division returns float
 
 import numpy as np
 import pandas as pd
@@ -15,13 +18,27 @@ from scipy import stats
 import matplotlib.pyplot as plt
 
 
-__author__ = 'Jose Luis Lopez Elvira'
-__version__ = '1.1.4'
-__date__ = '18/03/2021'
+__author__ = "Jose Luis Lopez Elvira"
+__version__ = "1.1.4"
+__date__ = "18/03/2021"
 
 
-#%%
-def bland_altman_plot(data1, data2, unidad='', etiquetaCasos=False, regr=0, tcrit_Exacto=False, n_decimales=1, ax=None, show_text=None, show_bias_LOA=False, color_lin=None, *args, **kwargs):
+# %%
+def bland_altman_plot(
+    data1,
+    data2,
+    unidad="",
+    etiquetaCasos=False,
+    regr=0,
+    tcrit_Exacto=False,
+    n_decimales=1,
+    ax=None,
+    show_text=None,
+    show_bias_LOA=False,
+    color_lin=None,
+    *args,
+    **kwargs
+) -> tuple:
     """Realiza gráfico de Bland-Altman para dos variables con medidas similares.
     Ejemplo de explicación en: https://www.medcalc.org/manual/blandaltman.php
     

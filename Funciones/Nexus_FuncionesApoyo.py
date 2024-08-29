@@ -20,13 +20,17 @@ El máximo lo utiliza para normalizar los canales EMG del archivo actual.
 
 
 __filename__ = "Nexus_FuncionesApoyo"
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __company__ = "CIDUMH"
-__date__ = "21/05/2024"
+__date__ = "26/07/2024"
 __author__ = "Jose L. L. Elvira"
 
 """
 Modificaciones:
+    26/07/2024, v0.3.0
+        - Corrección importante en el cálculo de AngSegRETROPIE con modelo
+          antiguo (a partir de metas).
+    
     21/05/2024, v0.3.0
         - Ahora importa funciones útiles desde el package instalable biomdp.
     
@@ -425,7 +429,8 @@ def calcula_bases(daData, modelo_completo=False) -> xr.Dataset:
         # PELVIS
         # datos_model=np.zeros((len(daDatos.time), 3))
         try:
-            origen = daData.sel(n_var="ASI").sum(dim="side") * 0.5
+            origen = daData.sel(n_var="ASI").sum(dim="side", skipna=False) * 0.5
+
             x = daData.sel(n_var="ASI", side="R") - origen
             vprovis = (
                 origen
@@ -533,7 +538,11 @@ def calcula_bases(daData, modelo_completo=False) -> xr.Dataset:
         if "Meta" in daData.n_var:
             daMeta = daData.sel(n_var="Meta")
         else:
-            daMeta = (daData.sel(n_var="Meta1") - daData.sel(n_var="Meta5")) * 0.5
+            daMeta = (
+                daData.sel(n_var=["Meta1", "Meta5"]).sum(dim="n_var", skipna=False)
+                * 0.5
+            )
+
         try:
 
             origen = daData.sel(n_var="TalonInf", side="L")

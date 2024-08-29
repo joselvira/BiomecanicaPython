@@ -16,13 +16,47 @@ Heredado de Nexus_FuncionesApoyo.py
 
 
 __filename__ = "bikefittinh_funciones_apoyo"
-__version__ = "0.2.0"
+__version__ = "0.4.3"
 __company__ = "CIDUMH"
-__date__ = "23/04/2024"
+__date__ = "02/07/2024"
 __author__ = "Jose L. L. Elvira"
 
 """
-Modificaciones:          
+Modificaciones:
+    02/07/2024, v0.4.3
+        - En la gráfica de la rodilla individual se incluye zoom de la zona
+          cercana a 180º de biela.
+    
+    23/06/2024, v0.4.2
+        - Perfecctionada gráfica plan frontal rodilla individual y en
+          exploración_globales_cinem.
+    
+    19/06/2024, v0.4.1
+        - Las gráficas de vAngBiela se ajustan al rango 0-180º y muestra la v media
+          de cada lado.
+    
+    09/06/2024, v0.4.0
+        - Al calcular el ángulo de biela ahora el lado R tiene su propio criterio
+          (se aplica en los 3 ejes). En los dos lados 0º significa biela sup.
+        
+    06/06/2024, v0.3.1
+        - Ligera modificación para incluir ID en los eventos calculados con los
+          datos continuos.
+        - Incluida función para devonver los datos discretos de variables en eventos
+          especificados.
+
+    29/05/2024, v0.3.0
+        - Calcula ancho entre caderas y metas para ajustar calas.
+          El cálculo es: Hip-Meta, positivo es hip más externo (en los dos lados).
+        - Graf vAngBiela reducido a 180º y calcula la media de cada lado sobre esos 180º.
+    
+    26/05/2024, v0.2.3
+        - Permite no sacar gráficas en consola.
+        
+    24/05/2024, v0.2.2
+        - En las gráficas de vAngBiela, se limita a 180º.
+        - Correcciones en carpeta guardar figuras (no tiene por qué ser Figs)
+    
     21/05/2024, v0.2.0
         - Ahora importa funciones útiles desde el package instalable biomdp.
     
@@ -42,7 +76,7 @@ Modificaciones:
 # DEFINE OPCIONES DE PROCESADO
 # =============================================================================
 bCrearGraficas = False  # crea las gráficas de ángulos y posiciones
-formatoImagenes = ".pdf"  #'.svg' #'.png'
+formato_imagen = ".pdf"  #'.svg' #'.png'
 bEnsembleAvg = (
     True  # puede ser True, False o 'completo' (la media con cada repe de fondo)
 )
@@ -73,6 +107,7 @@ import time  # para cuantificar tiempos de procesado
 import spm1d  # para comparar curvas
 
 import time
+import sys
 
 # Importa mis funciones necesarias
 import biomdp.biomec_xarray_accessor  # accessor biomxr
@@ -387,6 +422,13 @@ def calcula_angulos_desde_trajec(
 
     if "side" in daData.coords:
         daAngles = nfa.separa_trayectorias_lados(daData=daAngles)
+        
+        daAngles = individualiza_ang_biela_sides(daAngles)
+        
+        # ang2= np.unwrap(ang-np.pi*2.0) % (np.pi*2.0)-np.pi
+        # plt.plot(ang.T)
+        # plt.plot(ang2.T)
+        
 
     daAngles.name = "Angles"
     daAngles.attrs["units"] = "deg"
@@ -476,6 +518,21 @@ def calcula_ang_biela(daEje1, daEje2) -> xr.DataArray:
     daAngBiela.attrs["units"] = "rad"
 
     return daAngBiela
+
+def individualiza_ang_biela_sides(daData):
+    # TODO: COMPROBAR QUE FUNCIONA EN TODOS LOS CÁLCULOS --> FALLAN EVENTOS EN NEXUS
+    # TODO: COMPROBAR QUE FUNCIONA CON MÚLTIPLES ID
+    # Ajusta coord AngBiela en lado R, desfasa 180º        
+    ang = daData.sel(n_var="AngBiela", side='R', axis='x').values
+    daData.loc[dict(n_var="AngBiela", side="R", axis='x')] = np.unwrap(ang-np.pi) % (np.pi*2.0)
+    
+    ang = daData.sel(n_var="AngBiela", side='R', axis='x').values - np.pi
+    daData.loc[dict(n_var="AngBiela", side="R", axis='y')] = ang
+    
+    ang = daData.sel(n_var="AngBiela", side='R', axis='z').values
+    daData.loc[dict(n_var="AngBiela", side="R", axis='z')] = np.unwrap(ang+np.pi*2.0) % (np.pi*2.0)-np.pi
+    
+    return daData
 
 
 def calcula_vAng_biela(dsAngBiela, region_interest) -> xr.Dataset:
@@ -591,7 +648,7 @@ def calcula_variables_posicion(
     # ----Copia posiciones ejes articulares
     daEjeArtic = daData.sel(n_var=["HJC", "KJC", "AJC"])
 
-    # ----Calcula eje pedales.Con modelo actual con Pedal_A y Pedal_P, el antiguo con Meta5
+    # ----Calcula eje pedales. Con modelo actual con Pedal_A y Pedal_P, el antiguo con Meta5
     if "Pedal_A" in daData.n_var:
         daEjePedal = (
             daData.sel(n_var=["Pedal_A", "Pedal_P"])
@@ -685,6 +742,30 @@ def calcula_variables_posicion(
     daLengthKops.loc[dict(axis="x")] = daLengthKops.sel(axis="y").values
     daLengthKops.loc[dict(axis=["y", "z"])] = 0.0
 
+    # ---- Calcula distancia enteropost Meta-pedal. Rápido en eje y, pero debería ser paralelo a orientación pedal
+    daLengthMetaPedal = (
+        (daData.sel(n_var="Meta") - daEjePedal)
+        # .expand_dims("n_var")
+        .assign_coords(n_var=["LengthMetaPedal"])
+        .copy()
+        .transpose(..., "axis", "time")  # ("n_var", "side", "ID", "time", "axis")
+    )
+    # Mete la coordenada importante (y) en eje x y los demás vacíos
+    daLengthMetaPedal.loc[dict(axis="x")] = daLengthMetaPedal.sel(axis="y").values
+    daLengthMetaPedal.loc[dict(axis=["y", "z"])] = 0.0
+
+    # ---- Calcula ancho cadera-pedales
+    daLengthAnchoHipMeta = (
+        (daEjeArtic.sel(n_var=["HJC"]) - daData.sel(n_var="Meta"))
+        # .expand_dims("n_var")
+        .assign_coords(n_var=["LengthAnchoHipMeta"])
+        .copy()
+        .transpose(..., "axis", "time")  # ("n_var", "side", "ID", "time", "axis")
+    )
+    # Ajusta signo lado L
+    daLengthAnchoHipMeta.loc[dict(side='L')] *= -1.0
+    daLengthAnchoHipMeta.loc[dict(axis=["y", "z"])] = 0.0
+
     # ---- Calcula longitud muslos, piernas y pies
     daDistSegMuslo = (np.sqrt(((daEjeArtic.sel(n_var="HJC") - daEjeArtic.sel(n_var="KJC"))**2).sum('axis'))
                 .expand_dims({"n_var":["LengthMuslo"], 'axis':['x', 'y', 'z']})                
@@ -723,7 +804,7 @@ def calcula_variables_posicion(
 
     # ---- Concatena resultados
     daPos = xr.concat(
-        [daEjeArtic, daEjePedal, daEjeBiela, daLengthKops, daDistSegMuslo, daDistSegPierna, daDistSegPie], dim="n_var", join="left"
+        [daEjeArtic, daEjePedal, daEjeBiela, daLengthKops, daLengthMetaPedal, daLengthAnchoHipMeta, daDistSegMuslo, daDistSegPierna, daDistSegPie], dim="n_var", join="left"
     )  # join left para que guarde el orden de coords lado
     # daEjePedal.isel(ID=0, n_var=0, axis=0).plot.line(x='time')
 

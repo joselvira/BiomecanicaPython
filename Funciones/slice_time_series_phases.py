@@ -18,12 +18,19 @@ import matplotlib.pyplot as plt
 
 
 __author__ = "Jose Luis Lopez Elvira"
-__version__ = "v.4.1.0"
-__date__ = "23/04/2024"
+__version__ = "v.4.2.0"
+__date__ = "16/06/2024"
 
 
 """
+TODO: que haga los cortes interpolando para que empiecen las fases justo en el criterio?
+
 Modificaciones:
+    16/06/2024, v4.2.0
+        - Introducido argumento add_to_ini y add_to_end en función slice_time_series (de
+          momento sólo funciona en versión numpy).
+        - Optimizada la función numpy, más rapida.
+            
     23/04/2024, v4.1.0
         - Actualizado versión slice con Polars, puede que sea más rapido.
         - TODO: Probar versión detect_onset que use find_peaks con la señal derivada
@@ -396,13 +403,22 @@ def slice_time_series(
     discard_phases_ini: int = 0,
     n_phases: Optional[int] = None,
     discard_phases_end: int = 0,
+    add_to_ini: Optional[int] = None,
+    add_to_end: Optional[int] = None,
     include_first_next_last: Optional[bool] = False,
     max_phases: Optional[int] = 100,
     func_events: Optional[Any] = None,
     split_version_function: str = "numpy",  # "polars" or "numpy"
     **kwargs_func_events,
 ) -> xr.DataArray:
-    if events is None:  # if the events are not detected yet, detect them
+    """
+    add_to_ini: int. Add the specified number of points to the beginning from the end of the the previous phase
+    add_to_end: int. Add the specified number of points to the end from the beginning of the the next phase
+    include_first_next_last: bool. To deprecate. Similar to add_to_end=1
+    """
+
+    # If the events are not specified, detect them
+    if events is None:
         events = detect_events(
             data,
             freq,
@@ -418,8 +434,16 @@ def slice_time_series(
         )
 
     # Numpy version
-    def slice_aux(
-        dat, evts, max_phases, max_time, ID, var, include_first_next_last=True
+    def _slice_aux(
+        dat,
+        evts,
+        max_phases,
+        max_time,
+        ID,
+        var,
+        add_ini,
+        add_end,
+        # include_first_next_last,
     ):
         phases = np.full((max_phases, max_time), np.nan)
         # print(ID, var)
@@ -431,22 +455,41 @@ def slice_time_series(
 
         evts = evts[~np.isnan(evts)].astype(int)
 
-        t = np.split(dat, evts)[1:-1]
-        try:
-            t = np.array(list(itertools.zip_longest(*t, fillvalue=np.nan))).T
-            phases[: t.shape[0], : t.shape[1]] = t
-        except:
-            pass
+        if add_ini is not None and add_ini != 0:
+            evts -= add_ini
+            add_end += add_ini
+
+        for sl in range(len(evts) - 1):
+            d = dat[evts[sl] : evts[sl + 1] + add_end]
+            phases[sl, : len(d)] = d
+
+        """
+        # Whith np.split much slower
+        tpo=time.perf_counter()        
+        for i in range(1000):
+            t = np.split(dat, evts)[1:-1]
+            try:
+                t = np.array(list(itertools.zip_longest(*t, fillvalue=np.nan))).T
+                phases[: t.shape[0], : t.shape[1]] = t
+            except:
+                pass
+        print(f'{time.perf_counter()-tpo:.3f} s')
+        """
 
         # To include the first value of the next slice as the last of the
         # present. Usefull when graphing cycles
         # TODO: improve vectorizing
         # TODO: CHECK TO INCLUDE ONE LAST FRAME IN EACH PHASE
-        if include_first_next_last:
-            for sl in range(len(evts) - 1):
-                phases[sl, evts[sl + 1] - evts[sl]] = dat[evts[sl + 1]]
-                # phases[0, evts[1] - evts[0]-4:evts[1] - evts[0]+2]
-                # phases[1, evts[2] - evts[1]-4:evts[2] - evts[1]+2]
+
+        # if add_ini is not None or add_end is not None:
+        #     for sl in range(len(evts) - 1):
+        #         phases[sl, evts[sl + 1] - evts[sl] : evts[sl + 1] - evts[sl] + add_end] = dat[
+        #             evts[sl + 1] + add_end
+        #         ]
+        #         # phases[0, evts[1] - evts[0]-4:evts[1] - evts[0]+2]
+
+        #         # phases[1, evts[2] - evts[1]-4:evts[2] - evts[1]+2]
+
         return phases
 
     # Polars version
@@ -455,8 +498,16 @@ def slice_time_series(
     elif split_version_function == "pandas":
         import pandas as pd
 
-    def slice_aux_pl(
-        dat, evts, max_phases, max_time, ID, var, include_first_next_last=True
+    def _slice_aux_pl(
+        dat,
+        evts,
+        max_phases,
+        max_time,
+        ID,
+        var,
+        add_ini,
+        add_end,
+        # include_first_next_last=True,
     ):
         # print(ID, var)
         phases = np.full((max_time, max_phases), np.nan)
@@ -499,7 +550,7 @@ def slice_time_series(
             # To include the first value of the next slice as the last of the
             # present. Usefull when graphing cycles
             # TODO: improve vectorizing
-            if include_first_next_last:
+            if add_end > 0:  # include_first_next_last:
 
                 # dfph[np.diff(evts)[:-1]-1,:-1]
                 # dfph[135,:-1]
@@ -515,8 +566,16 @@ def slice_time_series(
             print(f"Error en {ID}, {var}")
         return phases.T
 
-    def slice_aux_pl_pivot(
-        dat, evts, max_phases, max_time, ID, var, include_first_next_last=True
+    def _slice_aux_pl_pivot(
+        dat,
+        evts,
+        max_phases,
+        max_time,
+        ID,
+        var,
+        add_ini,
+        add_end,
+        # include_first_next_last=True,
     ):
         # print(ID, var)
         phases = np.full((max_time, max_phases), np.nan)
@@ -555,8 +614,8 @@ def slice_time_series(
             # To include the first value of the next slice as the last of the
             # present. Usefull when graphing cycles
             # TODO: improve vectorizing
-            if include_first_next_last:
 
+            if add_end > 0:  # include_first_next_last:
                 # dfph[np.diff(evts)[:-1]-1,:-1]
                 # dfph[135,:-1]
 
@@ -571,8 +630,16 @@ def slice_time_series(
             print(f"Error en {ID}, {var}, {inst}")
         return phases.T
 
-    def slice_aux_pd(
-        dat, evts, max_phases, max_time, ID, var, include_first_next_last=True
+    def _slice_aux_pd(
+        dat,
+        evts,
+        max_phases,
+        max_time,
+        ID,
+        var,
+        add_ini,
+        add_end,
+        # include_first_next_last=True,
     ):
         # print(ID, var)
         phases = np.full((max_time, max_phases), np.nan)
@@ -653,8 +720,8 @@ def slice_time_series(
             # To include the first value of the next slice as the last of the
             # present. Usefull when graphing cycles
             # TODO: improve vectorizing
-            if include_first_next_last:
 
+            if add_end > 0:  # include_first_next_last:
                 # dfph[np.diff(evts)[:-1]-1,:-1]
                 # dfph[135,:-1]
 
@@ -670,22 +737,32 @@ def slice_time_series(
         return phases.T
 
     if split_version_function == "numpy":
-        func_slice = slice_aux
+        func_slice = _slice_aux
     elif split_version_function == "polars":
-        func_slice = slice_aux_pl
+        func_slice = _slice_aux_pl
     elif split_version_function == "polarspiv":
-        func_slice = slice_aux_pl_pivot
+        func_slice = _slice_aux_pl_pivot
     elif split_version_function == "pandas":
-        func_slice = slice_aux_pd
+        func_slice = _slice_aux_pd
     else:
         raise ValueError(f"Unknown split_version_function: {split_version_function}")
 
     """
-    dat=data[0,0,0,1].values
-    evts=events[0,0,0,1].values
+    dat=data[0,0,0].values
+    evts=events[0,0,0].values
+    add_ini=add_to_ini
+    add_end=add_to_end
     """
+    if include_first_next_last and (add_to_end == 0 or add_to_end is None):
+        add_to_end = 1
+    if add_to_ini is None:
+        add_to_ini = 0
+    if add_to_end is None:
+        add_to_end = 0
+
     max_phases = int(events.n_event[-1])
-    max_time = int(events.diff("n_event").max()) + 1
+    max_time = int(events.diff("n_event").max()) + add_to_ini + add_to_end
+
     da = xr.apply_ufunc(
         func_slice,
         data,
@@ -694,8 +771,9 @@ def slice_time_series(
         max_time,
         data.ID,
         data.n_var,
-        include_first_next_last,
-        input_core_dims=[[n_dim_time], ["n_event"], [], [], [], [], []],
+        add_to_ini,
+        add_to_end,
+        input_core_dims=[[n_dim_time], ["n_event"], [], [], [], [], [], []],
         output_core_dims=[["n_event", n_dim_time]],
         exclude_dims=set(("n_event", n_dim_time)),
         dataset_fill_value=np.nan,

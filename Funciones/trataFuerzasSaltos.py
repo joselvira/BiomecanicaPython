@@ -874,7 +874,7 @@ def load_merge_vicon_c3d_selectivo(
     n_estudio=None,
     show=False,
 ) -> xr.DataArray:
-    from read_vicon_c3d import read_vicon_c3d_xr  # , read_vicon_c3d_xr_global
+    from biomdp.read_vicon_c3d import read_vicon_c3d_xr  # , read_vicon_c3d_xr_global
 
     if hoja_registro is None:
         print("Debes especificar la hoja de registro")
