@@ -1,4 +1,30 @@
-# %% ----------------
+# =============================================================================
+# %% INICIA
+# =============================================================================
+
+__filename__ = "general_processing_functions"
+__version__ = "0.3.0"
+__company__ = "CIDUMH"
+__date__ = "04/09/2024"
+__author__ = "Jose L. L. Elvira"
+
+"""
+Modificaciones:
+    04/09/2024, v0.3.0
+        - Versión de crosscorrelation simple con Polars, mucho más rápida    
+
+    29/08/2024, v0.2.0
+        - Añadidas funciones auxiliares para calcular cross correlation. 
+
+    17/08/2024, v0.1.0
+        - Incluidas algunas funciones generales. 
+
+"""
+
+
+# =============================================================================
+# %% Carga librerías
+# =============================================================================
 
 from typing import Optional, Union
 
@@ -6,6 +32,8 @@ import numpy as np
 import xarray as xr
 
 import scipy.integrate as integrate
+
+import time
 
 
 def integrate_window(daData, daWindow=None, daOffset=None, result_return="continuous"):
@@ -271,6 +299,123 @@ def NormalizaBiela360_xr(
     return daNorm
 
 
+import polars as pl
+
+
+# from scipy import stats
+def _cross_correl_simple_aux(datos1, datos2, ID=None):
+    """Función simple y lenta pero exacta para cross correl
+    De momento en datos1 tiene que ir el más largo.
+    """
+    if ID is not None:
+        print(ID)
+
+    # pre-crea el array donde guardará las correlaciones de cada desfase
+    corr = np.full(max(len(datos1), len(datos2)), np.nan)
+
+    if np.isnan(datos1).all() or np.isnan(datos2).all():
+        print(f"{ID} vacío")
+        return corr
+
+    try:
+        # quita nans del final para función stats.pearson
+        dat1 = datos1[~np.isnan(datos1)]
+        dat2 = datos2[~np.isnan(datos2)]
+
+        for i in range(0, dat1.size - dat2.size):
+            # Versión Polars más rápida
+            df = pl.from_numpy(
+                np.vstack([dat1[i : i + dat2.size], dat2]),
+                schema=["a", "b"],
+                orient="col",
+            )
+            corr[i] = df.select(pl.corr("a", "b")).item()
+
+            # Versión scipy más lenta
+            # corr[i] = stats.pearsonr(dat1[i : i + dat2.size], dat2).statistic
+        # plt.plot(corr)
+
+    except Exception as err:
+        print("Error de cálculo, posiblemente vacío", err)
+
+    return corr  # si hay algún error, lo devuelve vacío
+
+
+def _cross_correl_simple_aux_pl(datos1, datos2, ID=None):
+    """Función simple y lenta pero exacta para cross correl
+    De momento en datos1 tiene que ir el más largo.
+    """
+    if ID is not None:
+        print(ID)
+
+    # pre-crea el array donde guardará las correlaciones de cada desfase
+    corr = np.full(max(len(datos1), len(datos2)), np.nan)
+
+    if np.isnan(datos1).all() or np.isnan(datos2).all():
+        print(f"{ID} vacío")
+        return corr
+
+    try:
+        # quita nans del final para función stats.pearson
+        dat1 = datos1[~np.isnan(datos1)]
+        dat2 = datos2[~np.isnan(datos2)]
+
+        for i in range(0, dat1.size - dat2.size):
+            # df = pl.from_numpy(np.asarray([dat1[i : i + dat2.size], dat2]), schema=["a", "b"], orient="col")
+            df = pl.from_numpy(
+                np.vstack([dat1[i : i + dat2.size], dat2]),
+                schema=["a", "b"],
+                orient="col",
+            )
+
+            corr[i] = df.select(pl.corr("a", "b")).item()
+        # plt.plot(corr)
+
+    except Exception as err:
+        print("Error de cálculo, posiblemente vacío", err)
+
+    return corr  # si hay algún error, lo devuelve vacío
+
+
+from scipy import signal
+
+
+def _cross_correl_rapida_aux(datos1, datos2, ID=None):
+    """Función rápida pero a veces menos exacta para cross correl"""
+    if ID is not None:
+        print(ID)
+
+    ccorr = np.full(max(len(datos1), len(datos2)), np.nan)
+
+    if np.isnan(datos1).all() and np.isnan(datos2).all():
+        return ccorr
+
+    # Quita Nans
+    dat1 = datos1[~np.isnan(datos1)]
+    dat2 = datos2[~np.isnan(datos2)]
+
+    # Normaliza
+    dat1 = (dat1 - np.mean(dat1)) / np.std(dat1)
+    dat2 = (dat2 - np.mean(dat2)) / np.std(dat2)
+
+    # Rellena con ceros
+    if len(dat1) != len(dat2):
+        if len(dat1) < len(dat2):
+            dat1 = np.append(dat1, np.zeros(len(dat2) - len(dat1)))
+        else:
+            dat2 = np.append(dat2, np.zeros(len(dat1) - len(dat2)))
+
+    # Calcula la correlación cruzada
+    c = signal.correlate(
+        np.gradient(np.gradient(dat1)), np.gradient(np.gradient(dat2)), "full"
+    )
+    c = c[int(len(c) / 2) :]
+    ccorr[: len(c)] = c
+    desfase = int(np.ceil(np.argmax(ccorr) - (len(ccorr)) / 2) + 1)
+
+    return ccorr  # [int(len(ccorr) / 2) :]
+
+
 # =============================================================================
 # %% TESTS
 # =============================================================================
@@ -438,3 +583,66 @@ if __name__ == "__main__":
     daWindow.loc[dict(event=["ini", "fin"], ID="00")] = np.array([0, len(var_a.time)])
 
     RMS(var_a, daWindow)
+
+    # =============================================================================
+    # %% TEST CROSSCORREL
+    # =============================================================================
+    daCrosscorr = xr.apply_ufunc(
+        _cross_correl_simple_aux,  # nombre de la función
+        # daiSen.sel(articulacion='rodilla', lado='L', eje='x').dropna(dim='time'),
+        daInstrumento1,
+        daInstrumento2,  # .sel(partID=da1['partID'], tiempo='pre'),
+        # daInstrumento1.time.size - daInstrumento2.time.size,
+        # daInstrumento1['partID'],
+        # daInstrumento1['tiempo'],
+        input_core_dims=[
+            ["time"],
+            ["time"],
+            [],
+            [],
+            [],
+        ],  # lista con una entrada por cada argumento
+        output_core_dims=[["lag"]],  # datos que devuelve
+        exclude_dims=set(
+            (
+                "lag",
+                "time",
+            )
+        ),  # dimensiones que se permite que cambien (tiene que ser un set)
+        # dataset_fill_value=np.nan,
+        vectorize=True,
+        dask="parallelized",
+        keep_attrs=False,
+        # kwargs=args_func_cortes,
+    ).dropna(dim="lag", how="all")
+    daCrosscorr = daCrosscorr.assign_coords(lag=range(len(daCrosscorr.lag)))
+
+    daCrosscorr = xr.apply_ufunc(
+        _cross_correl_rapida_aux,  # nombre de la función
+        # daiSen.sel(articulacion='rodilla', lado='L', eje='x').dropna(dim='time'),
+        daInstrumento1,
+        daInstrumento2,  # .sel(partID=da1['partID'], tiempo='pre'),
+        daInstrumento1.time.size - daInstrumento2.time.size,
+        daInstrumento1["partID"],
+        daInstrumento1["tiempo"],
+        input_core_dims=[
+            ["time"],
+            ["time"],
+            [],
+            [],
+            [],
+        ],  # lista con una entrada por cada argumento
+        output_core_dims=[["lag"]],  # datos que devuelve
+        exclude_dims=set(
+            (
+                "lag",
+                "time",
+            )
+        ),  # dimensiones que se permite que cambien (tiene que ser un set)
+        # dataset_fill_value=np.nan,
+        vectorize=True,
+        dask="parallelized",
+        keep_attrs=False,
+        # kwargs=args_func_cortes,
+    ).dropna(dim="lag", how="all")
+    daCrosscorr = daCrosscorr.assign_coords(lag=range(len(daCrosscorr.lag)))
