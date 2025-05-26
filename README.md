@@ -36,13 +36,15 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 ## Tratamiento de datos
 [Características de las ondas sinusoidales](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Caracteristicas_de_ondas_sinusoidales.ipynb)
 
-[Cómo transformar la orientación de las bases de datos](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Transformar_Bases_de_Datos.ipynb)
+[Cómo normalizar señales en vertical](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Normalizacion_vertical.ipynb)
 
 [Cómo cortar variables cíclicas en sus repeticiones](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Como_cortar_variables_ciclicas_en_sus_repeticiones.ipynb)
 
 [Análisis del perfil de fuerza en salto vertical](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Analisis_salto_vertical_Fuerzas.ipynb)
 
 [Cómo sincronizar señales con un desfase temporal](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Como_sincronizar_se%C3%B1ales_desfasadas.ipynb)
+
+[Cómo transformar la orientación de las bases de datos](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Transformar_Bases_de_Datos.ipynb)
 
 Preparación de datos para normalizar en el tiempo series de datos. (En proceso).
 
