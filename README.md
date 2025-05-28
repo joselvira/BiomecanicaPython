@@ -38,6 +38,8 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 
 [Cómo normalizar señales en vertical](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Normalizacion_vertical.ipynb)
 
+[Cómo detectar eventos en series temporales: (máximos, mínimos, cortes por umbral, onsets)](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Como_detectar_eventos.ipynb)
+
 [Cómo cortar variables cíclicas en sus repeticiones](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Como_cortar_variables_ciclicas_en_sus_repeticiones.ipynb)
 
 [Análisis del perfil de fuerza en salto vertical](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Analisis_salto_vertical_Fuerzas.ipynb)
