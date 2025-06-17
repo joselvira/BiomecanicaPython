@@ -29,7 +29,7 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 ## Representación gráfica de datos
 [Cómo configurar gráficas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Como_configurar_graficas.ipynb)
 
-[Tipos de gráficas sofisticadas específicas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/GraficasSofisticadasEspecificas.ipynb)
+[Tipos de gráficas sofisticadas específicas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Graficas_sofisticadas_especificas.ipynb)
 
 [Búsqueda masiva de errores en archivos de datos de una o varias carpetas](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Busqueda_errores_graficar_carpeta.ipynb)
 
