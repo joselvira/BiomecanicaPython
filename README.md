@@ -46,7 +46,7 @@ Y si tienes algún comentario o propuesta de mejora, estoy abierto a sugerencias
 
 [Cómo sincronizar señales con un desfase temporal](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Como_sincronizar_se%C3%B1ales_desfasadas.ipynb)
 
-[Cómo transformar la orientación de las bases de datos](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Transformar_Bases_de_Datos.ipynb)
+[Cómo transformar la orientación o estructura de las bases de datos](https://github.com/joselvira/BiomecanicaPython/blob/master/Notebooks/Transformar_Bases_de_Datos.ipynb)
 
 Preparación de datos para normalizar en el tiempo series de datos. (En proceso).
 
